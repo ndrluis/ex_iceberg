@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  otp: "25.0"
+  elixir: "1.16.2"
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Erlang & Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        otp-version: ${{ env.otp }}
+        elixir-version: ${{ env.elixir }}
+
+    - uses: hoverkraft-tech/compose-action@v2.0.0
+      with:
+        compose-file: "./docker-compose.yml"
+        down-flags: "--remove-orphans"
+        up-flags: "--no-start"
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Check formatting
+      run: mix format --check-formatted
+
+    - name: Check unused deps
+      run: mix deps.unlock --check-unused
+
+    - name: Check warnings
+      run: mix compile --warnings-as-errors
+
+    - name: Run tests
+      run: mix test --exclude integration
+
+    - name: Run integration tests
+      run: |
+        docker-compose up -d
+        mix test --only integration
+        docker-compose down --remove-orphans
