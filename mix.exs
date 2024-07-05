@@ -13,8 +13,7 @@ defmodule ExIceberg.MixProject do
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       preferred_cli_env: [
-        "test.all": :test,
-        "hex.publish": :docs
+        "test.all": :test
       ],
       deps: deps(),
       aliases: aliases(),
@@ -38,7 +37,6 @@ defmodule ExIceberg.MixProject do
     [
       {:req, "~> 0.5"},
       {:jason, "~> 1.2"},
-      {:mox, "~> 1.0", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
