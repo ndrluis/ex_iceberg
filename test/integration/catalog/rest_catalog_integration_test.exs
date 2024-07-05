@@ -1,6 +1,6 @@
-defmodule ExIceberg.Catalog.RestCatalogIntegrationTest do
+defmodule ExIceberg.Catalog.RestIntegrationTest do
   use ExUnit.Case, async: true
-  alias ExIceberg.Catalog.RestCatalog
+  alias ExIceberg.Rest.Catalog
 
   @moduletag :integration
 
@@ -11,19 +11,46 @@ defmodule ExIceberg.Catalog.RestCatalogIntegrationTest do
     "#{base}_#{hash}"
   end
 
-  test "successfully creates a new namespace" do
-    namespace = generate_unique_name("some_namespace")
-    catalog = RestCatalog.new("my_catalog", %{"uri" => @test_uri})
-    assert :ok == RestCatalog.create_namespace(catalog, namespace, %{})
+  describe "create_namespace/3" do
+    test "successfully creates a new namespace" do
+      namespace = generate_unique_name("some_namespace")
+      catalog = Catalog.new("my_catalog", %{uri: @test_uri})
+
+      assert {:ok, %Catalog{} = _catalog, response} =
+               Catalog.create_namespace(catalog, namespace, %{})
+
+      assert response == %{
+               "namespace" => [namespace],
+               "properties" => %{"location" => "s3://icebergdata/demo/#{namespace}"}
+             }
+    end
+
+    test "fails to create a new namespace due to conflict" do
+      namespace = generate_unique_name("examples")
+
+      catalog = Catalog.new("my_catalog", %{uri: @test_uri})
+
+      Catalog.create_namespace(catalog, namespace, %{})
+
+      assert {:error, %Catalog{} = _catalog, response} =
+               Catalog.create_namespace(catalog, namespace, %{})
+
+      assert response ==
+               "Request failed with status 409"
+    end
   end
 
-  test "fails to create a new namespace due to conflict" do
-    namespace = generate_unique_name("examples")
-    catalog = RestCatalog.new("my_catalog", %{"uri" => @test_uri})
+  describe "list_namespaces/1" do
+    test "successfully lists namespaces" do
+      namespace = generate_unique_name("some_namespace")
+      catalog = Catalog.new("my_catalog", %{uri: @test_uri})
 
-    assert :ok == RestCatalog.create_namespace(catalog, namespace, %{})
+      Catalog.create_namespace(catalog, namespace, %{})
 
-    assert {:error, "Request failed with status 409: Namespace already exists: #{namespace}"} ==
-             RestCatalog.create_namespace(catalog, namespace, %{})
+      assert {:ok, %Catalog{} = _catalog, %{"namespaces" => namespaces}} =
+               Catalog.list_namespaces(catalog)
+
+      assert [namespace] in namespaces
+    end
   end
 end
