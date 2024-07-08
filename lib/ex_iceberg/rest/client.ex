@@ -1,7 +1,7 @@
 defmodule ExIceberg.Rest.Client do
   alias ExIceberg.Rest.Config
 
-  def new(options \\ []) when is_list(options) do
+  def new(options \\ []) do
     base_url = build_base_url(options[:config])
 
     Req.new(base_url: base_url)
@@ -22,7 +22,7 @@ defmodule ExIceberg.Rest.Client do
 
   defp auth(request), do: request
 
-  defp build_base_url(%{uri: uri, prefix: prefix}) when prefix != nil do
+  defp build_base_url(%Config{uri: uri, prefix: prefix}) when prefix != nil do
     uri <> "/v1/" <> prefix
   end
 
@@ -31,7 +31,7 @@ defmodule ExIceberg.Rest.Client do
   end
 
   # TODO: Add options for exception handling
-  defp endpoint(:auth), do: [url: "/oauth/tokens", method: :post]
+  defp endpoint(:get_token), do: [url: "/oauth/tokens", method: :post]
   defp endpoint(:get_config), do: [url: "/config", method: :get]
   defp endpoint(:list_namespace), do: [url: "/namespaces", method: :get]
   defp endpoint(:create_namespace), do: [url: "/namespaces", method: :post]
