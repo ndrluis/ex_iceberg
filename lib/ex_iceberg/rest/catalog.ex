@@ -44,7 +44,7 @@ defmodule ExIceberg.Rest.Catalog do
 
   defp authenticate(%Catalog{config: config, client: client} = catalog)
        when config.credential != nil do
-    base_url = config.authorization_uri || config.uri
+    base_url = config.oauth2_server_uri || config.uri
 
     optional_params =
       %{audience: config.audience, resource: config.resource}
@@ -75,8 +75,8 @@ defmodule ExIceberg.Rest.Catalog do
 
   defp authenticate(catalog), do: catalog
 
-  defp get_config(%Catalog{config: config} = catalog) do
-    Client.request(:get_config, config: config)
+  defp get_config(%Catalog{config: config, client: client} = catalog) do
+    client.request(:get_config, config: config)
 
     # TODO: Parse config and merge
     # (default_config (from api) + user_config + override_config(from api))

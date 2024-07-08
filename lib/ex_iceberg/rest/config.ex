@@ -10,7 +10,7 @@ defmodule ExIceberg.Rest.Config do
     * `scope` - `openid offline corpds:ds:profile`: Desired scope of the requested security token (default: `catalog`).
     * `resource` - `rest_catalog.iceberg.com`: URI for the target resource or service.
     * `audience` - `rest_catalog`: Logical name of the target resource or service.
-    * `authorization_uri` - `https://auth-service/cc`: Authentication URL to use for client credentials authentication (default: `uri` + 'v1/oauth/tokens').
+    * `oauth2_server_uri` - `https://auth-service/cc`: Authentication URL to use for client credentials authentication (default: `uri` + 'v1/oauth/tokens').
   """
 
   defstruct uri: nil,
@@ -20,7 +20,7 @@ defmodule ExIceberg.Rest.Config do
             scope: "catalog",
             resource: nil,
             audience: nil,
-            authorization_uri: nil
+            oauth2_server_uri: nil
 
   @type t :: %__MODULE__{
           uri: String.t(),
@@ -30,7 +30,7 @@ defmodule ExIceberg.Rest.Config do
           scope: String.t(),
           resource: String.t(),
           audience: String.t(),
-          authorization_uri: String.t()
+          oauth2_server_uri: String.t()
         }
 
   def new(options) do
