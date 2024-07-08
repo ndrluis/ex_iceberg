@@ -37,7 +37,8 @@ defmodule ExIceberg.MixProject do
     [
       {:req, "~> 0.5"},
       {:jason, "~> 1.2"},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:plug, "~> 1.0"}
     ]
   end
 
