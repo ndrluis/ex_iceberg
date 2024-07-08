@@ -3,11 +3,21 @@ defmodule ExIceberg.Rest.CatalogTest do
   alias ExIceberg.Rest.Catalog
 
   describe "new/2" do
+    defmodule DefaultMockClient do
+      def request(:get_token, config: _, base_url: _, form: _) do
+        {:ok, "some_token"}
+      end
+
+      def request(:get_config, _), do: {:ok, %{}}
+    end
+
     test "does not authenticate when credential does not exist" do
       defmodule MockClient do
-        def request(:get_token, config: _, base_url: _, form: params) do
+        def request(:get_token, config: _, base_url: _, form: _) do
           send(self(), :get_token)
         end
+
+        def request(:get_config, _), do: {:ok, %{}}
       end
 
       Catalog.new(
@@ -31,6 +41,8 @@ defmodule ExIceberg.Rest.CatalogTest do
 
           {:ok, "some_token"}
         end
+
+        def request(:get_config, _), do: {:ok, %{}}
       end
 
       defmodule MockClientWithResource do
@@ -44,6 +56,8 @@ defmodule ExIceberg.Rest.CatalogTest do
 
           {:ok, "some_token"}
         end
+
+        def request(:get_config, _), do: {:ok, %{}}
       end
 
       Catalog.new(
@@ -66,6 +80,8 @@ defmodule ExIceberg.Rest.CatalogTest do
 
           {:ok, "some_token"}
         end
+
+        def request(:get_config, _), do: {:ok, %{}}
       end
 
       defmodule MockClientWithSingleCred do
@@ -74,6 +90,8 @@ defmodule ExIceberg.Rest.CatalogTest do
 
           {:ok, "some_token"}
         end
+
+        def request(:get_config, _), do: {:ok, %{}}
       end
 
       Catalog.new(
@@ -90,20 +108,36 @@ defmodule ExIceberg.Rest.CatalogTest do
     end
 
     test "merge token into config when authenticated" do
-      defmodule MockClient do
-        def request(:get_token, config: _, base_url: _, form: params) do
-          {:ok, "some_token"}
-        end
-      end
-
       %{config: config} =
         Catalog.new(
           "catalog",
           %{uri: "http://localhost:8181", credential: "foo"},
-          MockClient
+          DefaultMockClient
         )
 
       assert config.token == "some_token"
+    end
+
+    test "change the auth base url when oauth2_server_uri exists" do
+      defmodule MockClientCustomOauth do
+        def request(:get_token, config: _, base_url: base_url, form: _) do
+          assert base_url == "http://other_host.io"
+
+          {:ok, "some_token"}
+        end
+
+        def request(:get_config, _), do: {:ok, %{}}
+      end
+
+      Catalog.new(
+        "catalog",
+        %{
+          uri: "http://localhost:8181",
+          credential: "foo",
+          oauth2_server_uri: "http://other_host.io"
+        },
+        MockClientCustomOauth
+      )
     end
   end
 end
