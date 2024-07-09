@@ -13,7 +13,8 @@ defmodule ExIceberg.MixProject do
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       preferred_cli_env: [
-        "test.all": :test
+        "test.integration": :test,
+        "test.tabular": :test
       ],
       deps: deps(),
       aliases: aliases(),
@@ -29,7 +30,8 @@ defmodule ExIceberg.MixProject do
 
   def aliases do
     [
-      "test.all": ["test --include integration"]
+      "test.integration": ["test --only integration"],
+      "test.tabular": ["test --only tabular"]
     ]
   end
 

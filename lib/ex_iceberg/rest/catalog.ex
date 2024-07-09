@@ -44,7 +44,7 @@ defmodule ExIceberg.Rest.Catalog do
 
   defp authenticate(%Catalog{config: config, client: client} = catalog)
        when config.credential != nil do
-    base_url = config.oauth2_server_uri || config.uri
+    uri = config.oauth2_server_uri || config.uri
 
     optional_params =
       %{audience: config.audience, resource: config.resource}
@@ -57,16 +57,16 @@ defmodule ExIceberg.Rest.Catalog do
         %{
           client_id: client_id,
           client_secret: client_secret,
-          scope: config.scope
+          scope: config.scope,
+          grant_type: config.grant_type
         },
         optional_params
       )
 
-    {:ok, token} =
+    {:ok, %{"access_token" => token}} =
       client.request(
         :get_token,
-        config: catalog.config,
-        base_url: base_url,
+        config: %{catalog.config | uri: uri},
         form: params
       )
 
@@ -76,14 +76,16 @@ defmodule ExIceberg.Rest.Catalog do
   defp authenticate(catalog), do: catalog
 
   defp get_config(%Catalog{config: config, client: client} = catalog) do
-    client.request(:get_config, config: config)
+    params = if config.warehouse, do: [warehouse: config.warehouse], else: []
 
-    # TODO: Parse config and merge
-    # (default_config (from api) + user_config + override_config(from api))
-    # We need to list all the possible configurations. I know that in the
-    # other implementations, it's all dynamic, but I believe that with explicit configuration,
-    # we can have better control over the code.
+    {:ok, external_config} =
+      client.request(:get_config, config: config, params: params)
 
-    catalog
+    defaults_config = Config.parse(external_config["defaults"])
+    overrides_config = Config.parse(external_config["overrides"])
+
+    new_config = Config.merge(config, defaults_config, overrides_config)
+
+    %{catalog | config: new_config}
   end
 end
