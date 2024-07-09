@@ -6,7 +6,6 @@ defmodule ExIceberg.Rest.Client do
 
     Req.new(base_url: base_url)
     |> Req.Request.register_options([:config])
-    |> Req.Request.merge_options(config: options[:config])
     |> Req.Request.merge_options(options)
     |> Req.Request.prepend_request_steps(req_rest_catalog_auth: &auth/1)
   end
@@ -16,18 +15,36 @@ defmodule ExIceberg.Rest.Client do
     |> parse_response()
   end
 
-  defp auth(%{config: %{token: token}} = request) do
+  defp auth(%{options: %{config: %{token: token}}} = request) when token != nil do
     Req.Request.merge_options(request, auth: {:bearer, token})
   end
 
-  defp auth(request), do: request
+  defp auth(request) do
+    request
+  end
 
   defp build_base_url(%Config{uri: uri, prefix: prefix}) when prefix != nil do
-    uri <> "/v1/" <> prefix
+    "#{uri}/v1/#{prefix}"
+    |> URI.parse()
+    |> normalize_path()
+  end
+
+  defp build_base_url(%Config{oauth2_server_uri: uri}) when uri != nil do
+    uri
   end
 
   defp build_base_url(%Config{uri: uri}) do
-    uri <> "/v1/"
+    "#{uri}/v1/"
+    |> URI.parse()
+    |> normalize_path()
+  end
+
+  defp normalize_path(%URI{path: path} = uri) do
+    normalized_path =
+      path
+      |> String.replace(~r{/+}, "/")
+
+    %URI{uri | path: normalized_path}
   end
 
   # TODO: Add options for exception handling

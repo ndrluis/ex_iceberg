@@ -46,10 +46,16 @@ jobs:
       run: mix compile --warnings-as-errors
 
     - name: Run tests
-      run: mix test --exclude integration
+      run: mix test
 
     - name: Run integration tests
       run: |
         docker compose up -d
-        mix test --only integration
+        mix test.integration
         docker compose down --remove-orphans
+
+    - name: Run Tabular tests
+      env:
+        TABULAR_CREDENTIAL: ${{ secrets.TABULAR_CREDENTIAL }}
+      run: |
+        mix test.tabular
