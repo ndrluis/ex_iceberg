@@ -12,7 +12,7 @@ defmodule ExIceberg.Rest.Client do
 
   def request(action, options \\ []) do
     Req.request(new(options), endpoint(action))
-    |> parse_response()
+    |> ExIceberg.Rest.Response.parse(action)
   end
 
   defp auth(%{options: %{config: %{token: token}}} = request) when token != nil do
@@ -52,16 +52,13 @@ defmodule ExIceberg.Rest.Client do
   defp endpoint(:get_config), do: [url: "/config", method: :get]
   defp endpoint(:list_namespace), do: [url: "/namespaces", method: :get]
   defp endpoint(:create_namespace), do: [url: "/namespaces", method: :post]
+  defp endpoint(:drop_namespace), do: [url: "/namespaces/:namespace", method: :delete]
 
-  defp parse_response({:ok, %Req.Response{status: 200, body: body}}) do
-    {:ok, body}
-  end
+  defp endpoint(:load_namespace_metadata),
+    do: [url: "/namespaces/:namespace", method: :get]
 
-  defp parse_response({:ok, %Req.Response{status: status}}) when status >= 400 do
-    {:error, "Request failed with status #{status}"}
-  end
+  defp endpoint(:update_namespace_properties),
+    do: [url: "/namespaces/:namespace/properties", method: :post]
 
-  defp parse_response({:error, reason}) do
-    {:error, reason}
-  end
+  defp endpoint(:namespace_exists), do: [url: "/namespaces/:namespace", method: :head]
 end

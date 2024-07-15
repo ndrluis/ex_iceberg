@@ -42,6 +42,55 @@ defmodule ExIceberg.Rest.Catalog do
     end
   end
 
+  @impl true
+  def drop_namespace(%Catalog{config: config, client: client} = catalog, namespace) do
+    case client.request(:drop_namespace, config: config, path_params: [namespace: namespace]) do
+      {:ok, response} -> {:ok, catalog, response}
+      {:error, reason} -> {:error, catalog, reason}
+    end
+  end
+
+  @impl true
+  def namespace_exists?(%Catalog{config: config, client: client} = catalog, namespace) do
+    case client.request(:namespace_exists, config: config, path_params: [namespace: namespace]) do
+      {:ok, response} -> {:ok, catalog, response}
+      {:error, reason} -> {:error, catalog, reason}
+    end
+  end
+
+  @impl true
+  def load_namespace_metadata(%Catalog{config: config, client: client} = catalog, namespace) do
+    case client.request(:load_namespace_metadata,
+           config: config,
+           path_params: [namespace: namespace]
+         ) do
+      {:ok, response} -> {:ok, catalog, response}
+      {:error, reason} -> {:error, catalog, reason}
+    end
+  end
+
+  @impl true
+  def update_namespace_properties(
+        %Catalog{config: config, client: client} = catalog,
+        namespace,
+        removals \\ [],
+        updates \\ %{}
+      ) do
+    body =
+      %{}
+      |> Map.put("removals", removals)
+      |> Map.put("updates", updates)
+
+    case client.request(:update_namespace_properties,
+           config: config,
+           path_params: [namespace: namespace],
+           json: body
+         ) do
+      {:ok, response} -> {:ok, catalog, response}
+      {:error, reason} -> {:error, catalog, reason}
+    end
+  end
+
   defp authenticate(%Catalog{config: config, client: client} = catalog)
        when config.credential != nil do
     uri = config.oauth2_server_uri || config.uri

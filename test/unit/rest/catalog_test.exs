@@ -1,4 +1,4 @@
-defmodule ExIceberg.Rest.CatalogTest do
+defmodule Unit.Rest.CatalogTest do
   use ExUnit.Case, async: true
   alias ExIceberg.Rest.Catalog
 
