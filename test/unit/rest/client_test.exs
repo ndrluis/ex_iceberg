@@ -1,4 +1,4 @@
-defmodule ExIceberg.Rest.ClientTest do
+defmodule Unit.Rest.ClientTest do
   use ExUnit.Case, async: true
 
   alias ExIceberg.Rest.Client

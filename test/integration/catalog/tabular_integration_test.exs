@@ -1,4 +1,4 @@
-defmodule ExIceberg.Catalog.TabularIntegrationTest do
+defmodule Integration.Catalog.TabularIntegrationTest do
   use ExUnit.Case, async: true
   alias ExIceberg.Rest.Catalog
 

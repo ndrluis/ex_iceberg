@@ -1,17 +1,17 @@
-defmodule ExIceberg.Rest.ConfigTest do
+defmodule Unit.Rest.ConfigTest do
   use ExUnit.Case, async: true
 
   alias ExIceberg.Rest.Config
 
   describe "split_credential/1" do
-    test "should split the credentials by :" do
+    test "split the credentials by :" do
       assert Config.split_credential("foo:bar") == {"foo", "bar"}
       assert Config.split_credential("foo") == {"foo", nil}
     end
   end
 
   describe "parse/1" do
-    test "should parse the config" do
+    test "parse the config" do
       config = %{
         "uri" => "http://localhost:8181",
         "prefix" => "prefix",
@@ -38,7 +38,7 @@ defmodule ExIceberg.Rest.ConfigTest do
   end
 
   describe "merge/3" do
-    test "should merge the configs" do
+    test "merge the configs" do
       local_config = %Config{
         uri: "http://local_config:8181",
         prefix: "prefix-local",
