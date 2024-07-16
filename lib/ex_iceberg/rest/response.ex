@@ -1,4 +1,6 @@
 defmodule ExIceberg.Rest.Response do
+  @moduledoc false
+
   def parse({:ok, %Req.Response{status: 404}}, :namespace_exists) do
     {:ok, false}
   end

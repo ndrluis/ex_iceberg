@@ -1,4 +1,5 @@
 defmodule ExIceberg.S3.Config do
+  @moduledoc false
   defstruct [
     :endpoint,
     :access_key_id,
