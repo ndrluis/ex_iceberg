@@ -1,4 +1,5 @@
 defmodule ExIceberg.Rest.Client do
+  @moduledoc false
   alias ExIceberg.Rest.Config
 
   def new(options \\ []) do

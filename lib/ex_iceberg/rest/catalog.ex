@@ -1,7 +1,5 @@
 defmodule ExIceberg.Rest.Catalog do
-  @moduledoc """
-  Module to interact with the REST catalog of Apache Iceberg.
-  """
+  @moduledoc false
 
   alias ExIceberg.Rest.Client
   alias ExIceberg.Rest.Config
