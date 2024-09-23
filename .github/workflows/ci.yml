@@ -27,7 +27,7 @@ jobs:
         otp-version: ${{ env.otp }}
         elixir-version: ${{ env.elixir }}
 
-    - uses: hoverkraft-tech/compose-action@v2.0.1
+    - uses: hoverkraft-tech/compose-action@v2.0.2
       with:
         compose-file: "./docker-compose.yml"
         down-flags: "--remove-orphans"
