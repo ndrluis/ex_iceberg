@@ -1,7 +1,7 @@
 defmodule ExIceberg.MixProject do
   use Mix.Project
 
-  @version "0.3.0-dev"
+  @version "0.3.0"
   @description "ExIceberg is an Elixir library for interacting with Apache Iceberg."
 
   def project do
@@ -13,8 +13,7 @@ defmodule ExIceberg.MixProject do
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       preferred_cli_env: [
-        "test.integration": :test,
-        "test.tabular": :test
+        "test.integration": :test
       ],
       deps: deps(),
       aliases: aliases(),
@@ -31,7 +30,6 @@ defmodule ExIceberg.MixProject do
   def aliases do
     [
       "test.integration": ["test --only integration"],
-      "test.tabular": ["test --only tabular"],
       "rust.lint": [
         "cmd cargo clippy --manifest-path=native/ex_iceberg_nif/Cargo.toml -- -Dwarnings"
       ],

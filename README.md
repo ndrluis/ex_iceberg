@@ -16,7 +16,7 @@ Add `ex_iceberg` to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-    {:ex_iceberg, "~> 0.2.0"}
+    {:ex_iceberg, "~> 0.3.0"}
   ]
 end
 ```
