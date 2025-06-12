@@ -1,10 +1,10 @@
 [package]
-name = "ex_iceberg_nif"
+name = "ex_iceberg"
 version = "0.3.0"
 edition = "2021"
 
 [lib]
-name = "ex_iceberg_nif"
+name = "ex_iceberg"
 crate-type = ["cdylib"]
 
 [features]
@@ -15,6 +15,7 @@ rustler_precompiled = []
 rustler = "0.36.1"
 iceberg = "0.4"
 iceberg-catalog-rest = "0.4"
+openssl = { version = "0.10", features = ["vendored"] }
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

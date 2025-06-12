@@ -31,9 +31,9 @@ defmodule ExIceberg.MixProject do
     [
       "test.integration": ["test --only integration"],
       "rust.lint": [
-        "cmd cargo clippy --manifest-path=native/ex_iceberg_nif/Cargo.toml -- -Dwarnings"
+        "cmd cargo clippy --manifest-path=native/ex_iceberg/Cargo.toml -- -Dwarnings"
       ],
-      "rust.fmt": ["cmd cargo fmt --manifest-path=native/ex_iceberg_nif/Cargo.toml --all"],
+      "rust.fmt": ["cmd cargo fmt --manifest-path=native/ex_iceberg/Cargo.toml --all"],
       "rust.check": ["rust.fmt", "rust.lint"]
     ]
   end
