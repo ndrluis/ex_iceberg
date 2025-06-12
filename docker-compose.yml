@@ -1,22 +1,48 @@
 version: '3.8'
 
+# Lakekeeper-based development environment
+# Based on: https://github.com/lakekeeper/lakekeeper
+#
+# This setup provides:
+# - Lakekeeper Iceberg REST catalog
+# - PostgreSQL database
+# - MinIO object storage
+# - Keycloak for authentication (optional)
+
 services:
-  server:
-    image: quay.io/hansetag/iceberg-catalog:latest
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
     environment:
-      - ICEBERG_REST__BASE_URI=http://localhost:8080/catalog/
-      - ICEBERG_REST__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
-      - ICEBERG_REST__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
-      - ICEBERG_REST__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres
-      - ICEBERG_REST__DEFAULT_PROJECT_ID=00000000-0000-0000-0000-000000000000
-      - RUST_LOG=info
-    entrypoint: [ "./iceberg-catalog", "serve" ]
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    volumes:
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json
     healthcheck:
-      test: [ "CMD", "/home/nonroot/iceberg-catalog", "healthcheck" ]
-      interval: 1s
+      test: [ "CMD-SHELL", 'exec 3<>/dev/tcp/127.0.0.1/8080;echo -e "GET /realms/master/.well-known/openid-configuration HTTP/1.1\r\nhost: 127.0.0.1:8080\r\nConnection: close\r\n\r\n" >&3;grep "jwks_uri"  <&3' ]
+      interval: 2s
       timeout: 10s
-      retries: 3
-      start_period: 3s
+      retries: 2
+      start_period: 60s
+    ports:
+      - "30080:8080"
+    command: [ "start-dev", "--metrics-enabled=true", "--health-enabled=true", "--import-realm", "--verbose", "--log-level=INFO", "--features=token-exchange" ]
+    networks:
+      iceberg_net:
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:v0.8.5
+    pull_policy: always
+    environment:
+      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres
+      - LAKEKEEPER__OPENID_PROVIDER_URI=http://keycloak:8080/realms/iceberg
+      - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS=http://localhost:30080/realms/iceberg
+      - LAKEKEEPER__OPENID_AUDIENCE=lakekeeper
+      - LAKEKEEPER__UI__OPENID_CLIENT_ID=lakekeeper
+      - LAKEKEEPER__UI__OPENID_PROVIDER_URI=http://localhost:30080/realms/iceberg
+      - RUST_LOG=info,lakekeeper=trace,middle=trace
+    command: [ "serve" ]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -27,54 +53,32 @@ services:
     networks:
       iceberg_net:
     ports:
-      - "8080:8080"
+      - "8181:8181"
 
   migrate:
-    image: quay.io/hansetag/iceberg-catalog:latest
+    image: quay.io/lakekeeper/catalog:v0.8.5
+    pull_policy: always
     environment:
-      - ICEBERG_REST__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
-      - ICEBERG_REST__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
-      - ICEBERG_REST__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres
+      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!
+      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres
+      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres
       - RUST_LOG=info
     restart: "no"
-    entrypoint: [ "/home/nonroot/iceberg-catalog", "migrate" ]
+    command: [ "migrate" ]
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      iceberg_net:
-
-  initialproject:
-    image: curlimages/curl
-    depends_on:
-      server:
+      keycloak:
         condition: service_healthy
-    restart: "no"
-    command:
-      - -w
-      - "%{http_code}"
-      - "-X"
-      - "POST"
-      - "-v"
-      - "http://server:8080/management/v1/warehouse"
-      - "-H"
-      - "Content-Type: application/json"
-      - "--data"
-      - "@create-default-warehouse.json"
-      - "-o"
-      - "/dev/null"
-    volumes:
-      - ./create-default-warehouse.json:/home/curl_user/create-default-warehouse.json
     networks:
       iceberg_net:
 
   db:
-    image: bitnami/postgresql:15
+    image: bitnami/postgresql:16.3.0
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=postgres
-      - PGUSER=postgres
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=postgres
+      - POSTGRESQL_DATABASE=postgres
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -p 5432 -d postgres" ]
       interval: 2s
@@ -85,7 +89,7 @@ services:
       iceberg_net:
 
   minio:
-    image: bitnami/minio:latest
+    image: bitnami/minio:2025.4.22
     environment:
       - MINIO_ROOT_USER=minio-root-user
       - MINIO_ROOT_PASSWORD=minio-root-password
@@ -101,5 +105,11 @@ services:
       start_period: 15s
     networks:
       iceberg_net:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
 networks:
   iceberg_net:
