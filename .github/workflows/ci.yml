@@ -2,60 +2,146 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 env:
-  otp: "25.0"
-  elixir: "1.16.2"
+  MIX_ENV: test
 
 jobs:
-  build:
+  test:
+    name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
+    runs-on: ubuntu-22.04
 
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - otp: 26.2
+            elixir: 1.16
+
+          - otp: 27.2
+            elixir: 1.17
+
+          - otp: 27.2
+            elixir: 1.18
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install Erlang & Elixir
+    - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
-        otp-version: ${{ env.otp }}
-        elixir-version: ${{ env.elixir }}
+        elixir-version: ${{ matrix.elixir }}
+        otp-version: ${{ matrix.otp }}
 
-    - uses: hoverkraft-tech/compose-action@v2.0.1
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
-        compose-file: "./docker-compose.yml"
-        down-flags: "--remove-orphans"
-        up-flags: "--no-start"
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Cache deps
+      uses: actions/cache@v4
+      with:
+        path: deps
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+
+    - name: Cache _build
+      uses: actions/cache@v4
+      with:
+        path: _build
+        key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-
+
+    - name: Cache Rust
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          native/ex_iceberg_nif/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-
 
     - name: Install dependencies
       run: mix deps.get
 
-    - name: Check formatting
-      run: mix format --check-formatted
-
-    - name: Check unused deps
+    - name: Check unused dependencies
       run: mix deps.unlock --check-unused
 
-    - name: Check warnings
+    - name: Check Elixir formatting
+      run: mix format --check-formatted
+
+    - name: Check Rust formatting
+      run: mix rust.fmt
+
+    - name: Run Rust linting
+      run: mix rust.lint
+
+    - name: Compile
       run: mix compile --warnings-as-errors
+      env:
+        EX_ICEBERG_BUILD: true
 
     - name: Run tests
       run: mix test
+      env:
+        EX_ICEBERG_BUILD: true
+
+  integration_test:
+    name: Integration Tests
+    runs-on: ubuntu-22.04
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: iceberg
+          POSTGRES_DB: iceberg
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.16'
+        otp-version: '26'
+
+    - name: Add hosts to /etc/hosts
+      run: |
+          sudo echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache deps
+      uses: actions/cache@v4
+      with:
+        path: deps
+        key: integration-${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: integration-${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Start Docker Compose
+      run: docker compose up -d
 
     - name: Run integration tests
-      run: |
-        docker compose up -d
-        mix test.integration
-        docker compose down --remove-orphans
-
-    - name: Run Tabular tests
+      run: mix test.integration
       env:
-        TABULAR_CREDENTIAL: ${{ secrets.TABULAR_CREDENTIAL }}
-      run: |
-        mix test.tabular
+        EX_ICEBERG_BUILD: true
