@@ -121,6 +121,10 @@ jobs:
         elixir-version: '1.16'
         otp-version: '26'
 
+    - name: Add hosts to /etc/hosts
+      run: |
+          sudo echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
