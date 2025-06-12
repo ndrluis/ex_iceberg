@@ -137,10 +137,6 @@ jobs:
     - name: Start Docker Compose
       run: docker compose up -d
 
-    - name: Wait for services
-      run: |
-        timeout 60 bash -c 'until curl -f http://localhost:8181/v1/config > /dev/null 2>&1; do sleep 2; done'
-
     - name: Run integration tests
       run: mix test.integration
       env:
