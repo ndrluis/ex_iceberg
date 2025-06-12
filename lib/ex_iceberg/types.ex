@@ -45,7 +45,12 @@ defmodule ExIceberg.Types do
   defmodule Map do
     @moduledoc "Represents a map type with key-value types and requirements."
     defstruct [:key_type, :value_type, :value_required]
-    @type t :: %__MODULE__{key_type: ExIceberg.Types.type(), value_type: ExIceberg.Types.type(), value_required: boolean()}
+
+    @type t :: %__MODULE__{
+            key_type: ExIceberg.Types.type(),
+            value_type: ExIceberg.Types.type(),
+            value_required: boolean()
+          }
   end
 
   defmodule Struct do
@@ -107,10 +112,11 @@ defmodule ExIceberg.Types do
       {:list, element_type: :int, element_required: true}
   """
   def list(element_type, opts \\ []) do
-    {:list, %{
-      element_type: element_type,
-      element_required: Keyword.get(opts, :element_required, false)
-    }}
+    {:list,
+     %{
+       element_type: element_type,
+       element_required: Keyword.get(opts, :element_required, false)
+     }}
   end
 
   @doc """
@@ -125,11 +131,12 @@ defmodule ExIceberg.Types do
       {:map, key_type: :string, value_type: :string, value_required: true}
   """
   def map(key_type, value_type, opts \\ []) do
-    {:map, %{
-      key_type: key_type,
-      value_type: value_type,
-      value_required: Keyword.get(opts, :value_required, false)
-    }}
+    {:map,
+     %{
+       key_type: key_type,
+       value_type: value_type,
+       value_required: Keyword.get(opts, :value_required, false)
+     }}
   end
 
   @doc """

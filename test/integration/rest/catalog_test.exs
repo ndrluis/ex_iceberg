@@ -88,10 +88,11 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
         "scope" => "lakekeeper"
       }
 
-      token_response = Req.post!(
-        "http://localhost:30080/realms/iceberg/protocol/openid-connect/token",
-        form: token_request
-      )
+      token_response =
+        Req.post!(
+          "http://localhost:30080/realms/iceberg/protocol/openid-connect/token",
+          form: token_request
+        )
 
       access_token = token_response.body["access_token"]
 
