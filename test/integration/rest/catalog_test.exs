@@ -167,6 +167,10 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
     end
   end
 
+  setup do
+    setup_warehouse()
+  end
+
   describe "new/2" do
     test "successfully creates a catalog instance" do
       catalog = Catalog.new("test_catalog", @config)
@@ -181,7 +185,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "list_namespaces/1" do
     test "successfully lists namespaces from real server" do
-      setup_warehouse()
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, %Catalog{} = updated_catalog, namespaces} = Catalog.list_namespaces(catalog)
@@ -204,7 +207,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "create_namespace/3" do
     test "successfully creates a new namespace" do
-      setup_warehouse()
       namespace = generate_unique_name("test_namespace")
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
@@ -231,7 +233,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
     end
 
     test "handles duplicate namespace creation" do
-      setup_warehouse()
       namespace = generate_unique_name("duplicate_namespace")
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
@@ -251,7 +252,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "table operations" do
     test "table lifecycle: create, exists, drop" do
-      setup_warehouse()
       namespace = generate_unique_name("table_test")
       table_name = SimpleSchema.__table_name__()
       catalog = Catalog.new("test_catalog", @oauth2_config)
@@ -293,7 +293,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "schema-based type support" do
     test "create table with all primitive types" do
-      setup_warehouse()
       namespace = generate_unique_name("primitive_test")
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
@@ -349,7 +348,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "OAuth2 authentication" do
     test "successfully creates catalog with OAuth2 credentials" do
-      setup_warehouse()
       catalog = Catalog.new("oauth2_catalog", @oauth2_config)
 
       assert %Catalog{} = catalog
@@ -366,7 +364,6 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
     end
 
     test "OAuth2 catalog can list namespaces" do
-      setup_warehouse()
       catalog = Catalog.new("oauth2_catalog", @oauth2_config)
 
       {:ok, %Catalog{} = updated_catalog, namespaces} = Catalog.list_namespaces(catalog)
