@@ -21,12 +21,7 @@ is a bit more involved than it would be otherwise.
 
    to download all the artifacts and generate the checksum file.
 6. Create the `checksum-Elixir.ExIceberg.Nif.exs` file with the SHA 256 contents from the previous step.
-7. Commit and push the checksum file:
-
-        git add checksum-Elixir.ExIceberg.Nif.exs
-        git commit -m "Add checksums for vx.x.x"
-        git push origin main
-
+7. Paste the SHA 256 contents into the release description on GitHub.
 8. Run `mix hex.publish` - please double check the dependencies and files, and confirm.
 9. Bump the version in the `mix.exs` and add the `-dev` flag to it (e.g., `0.3.1-dev`).
 
@@ -42,7 +37,7 @@ The precompiled NIFs are built for the following platforms:
 
 ### NIF Versions
 
-We support NIF versions: `2.15`, `2.16`, `2.17` to ensure compatibility across different Erlang/OTP versions.
+We support NIF versions: `2.15`
 
 ### Troubleshooting
 

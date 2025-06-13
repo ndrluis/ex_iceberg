@@ -1,7 +1,7 @@
 defmodule ExIceberg.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.4.0-dev"
   @description "ExIceberg is an Elixir library for interacting with Apache Iceberg."
 
   def project do
@@ -44,13 +44,20 @@ defmodule ExIceberg.MixProject do
       {:jason, "~> 1.2"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:plug, "~> 1.0"},
-      {:rustler, "~> 0.34", runtime: false},
+      {:rustler, "~> 0.34", optional: true},
       {:rustler_precompiled, "~> 0.8"}
     ]
   end
 
   defp package do
     [
+      files: [
+        "lib",
+        "native",
+        "checksum-*.exs",
+        "mix.exs",
+        "LICENSE"
+      ],
       licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => "https://github.com/ndrluis/ex_iceberg"
