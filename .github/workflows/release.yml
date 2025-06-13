@@ -1,24 +1,43 @@
-name: Precompile NIFs
+name: Precomp NIFs
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      # Just run on main branch if "native" path changed.
+      - "native/**"
+      # Also run if this file changes.
+      - ".github/workflows/release.yml"
     tags:
-      - "v*"
+      # Tags will always run.
+      - "*"
+  pull_request:
+    paths:
+      # In PRs we only run if this file changes.
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 jobs:
   build_release:
-    name: NIF ${{ matrix.nif }} - ${{ matrix.job.target }} (${{ matrix.job.os }})
+    name: NIF ${{ matrix.nif }} - ${{ matrix.job.target }} (${{ matrix.job.os }} | ${{ matrix.job.variant || 'default' }})
     runs-on: ${{ matrix.job.os }}
+
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
     strategy:
       fail-fast: false
       matrix:
-        nif: ["2.15", "2.16", "2.17"]
+        nif: ["2.15"]
         job:
-          - { target: aarch64-apple-darwin, os: macos-14 }
+          - { target: aarch64-apple-darwin, os: macos-13 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04, use-cross: true }
           - { target: aarch64-unknown-linux-musl, os: ubuntu-22.04, use-cross: true }
-          - { target: x86_64-apple-darwin, os: macos-12 }
+          - { target: arm-unknown-linux-gnueabihf, os: ubuntu-22.04, use-cross: true }
+          - { target: x86_64-apple-darwin, os: macos-13 }
           - { target: x86_64-pc-windows-gnu, os: windows-2022 }
           - { target: x86_64-pc-windows-msvc, os: windows-2022 }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
@@ -28,40 +47,37 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Extract project version
+      - name: Extract crate information
         shell: bash
         run: |
-          # Get the version from mix.exs
-          echo "PROJECT_VERSION=$(grep -o '@version "[^"]*"' mix.exs | grep -o '"[^"]*"' | tr -d '"')" >> $GITHUB_ENV
+          # Get the project version from mix.exs
+          echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           target: ${{ matrix.job.target }}
 
-      - name: Install Erlang and Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: 26.2
-          elixir-version: 1.16.1
-
-      - name: Install cross
-        if: ${{ matrix.job.use-cross }}
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cross
+      - name: Add target
+        shell: bash
+        run: |
+          rustup target add ${{ matrix.job.target }}
 
       - name: Build the project
         id: build-crate
         uses: philss/rustler-precompiled-action@v1.1.4
         with:
-          project-name: ex_iceberg_nif
+          project-name: ex_iceberg
           project-version: ${{ env.PROJECT_VERSION }}
           target: ${{ matrix.job.target }}
           nif-version: ${{ matrix.nif }}
           use-cross: ${{ matrix.job.use-cross }}
-          cargo-args: --features rustler_precompiled
+          project-dir: "native/ex_iceberg"
+
+      - name: Artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ steps.build-crate.outputs.file-path }}
 
       - name: Artifact upload
         uses: actions/upload-artifact@v4
@@ -72,5 +88,6 @@ jobs:
       - name: Publish archives and packages
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.build-crate.outputs.file-path }}
+          files: |
+            ${{ steps.build-crate.outputs.file-path }}
         if: startsWith(github.ref, 'refs/tags/')

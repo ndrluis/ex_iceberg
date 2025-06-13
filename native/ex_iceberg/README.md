@@ -8,7 +8,7 @@
 
 ```elixir
 defmodule ExIceberg.Nif do
-  use Rustler, otp_app: :ex_iceberg, crate: "ex_iceberg_nif"
+  use Rustler, otp_app: :ex_iceberg, crate: "ex_iceberg"
 
   # When your NIF is loaded, it will override this function.
   def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)

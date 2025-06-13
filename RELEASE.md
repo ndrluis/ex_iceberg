@@ -14,7 +14,7 @@ is a bit more involved than it would be otherwise.
    commit with the version number (format: `vx.x.x`).
 3. This will kick off the "Precompile NIFs" GitHub Action. Wait for this to complete.
 4. While the NIFs are compiling, ensure you have the latest version of `main` and don't have any
-   intermediate builds by running `rm -rf native/ex_iceberg_nif/target`.
+   intermediate builds by running `rm -rf native/ex_iceberg/target`.
 5. Once the NIFs are built, use:
 
         EX_ICEBERG_BUILD=true mix rustler_precompiled.download ExIceberg.Nif --all --print
