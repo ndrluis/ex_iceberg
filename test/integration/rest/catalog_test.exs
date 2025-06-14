@@ -251,9 +251,10 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
   end
 
   describe "table operations" do
-    test "table lifecycle: create, exists, load, drop" do
+    test "table lifecycle: create, exists, load, rename, drop" do
       namespace = generate_unique_name("table_test")
       table_name = SimpleSchema.__table_name__()
+      new_table_name = "#{table_name}_renamed"
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
@@ -270,8 +271,30 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       {:ok, catalog, table} = Catalog.load_table(catalog, namespace, table_name)
       assert %ExIceberg.Table{} = table
 
-      # Get metadata from table
-      table_metadata = ExIceberg.Table.metadata(table)
+      # Test rename_table
+      {:ok, catalog, rename_response} =
+        Catalog.rename_table(catalog, namespace, table_name, namespace, new_table_name)
+
+      assert is_map(rename_response)
+      assert Map.has_key?(rename_response, "renamed")
+
+      assert String.contains?(
+               rename_response["renamed"],
+               "#{namespace}.#{table_name} -> #{namespace}.#{new_table_name}"
+             )
+
+      # Verify original table no longer exists
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, namespace, table_name)
+
+      # Verify renamed table exists
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, namespace, new_table_name)
+
+      # Load the renamed table to test metadata
+      {:ok, catalog, renamed_table} = Catalog.load_table(catalog, namespace, new_table_name)
+      assert %ExIceberg.Table{} = renamed_table
+
+      # Get metadata from renamed table
+      table_metadata = ExIceberg.Table.metadata(renamed_table)
       assert is_map(table_metadata)
       assert Map.has_key?(table_metadata, "table_uuid")
       assert Map.has_key?(table_metadata, "format_version")
@@ -300,8 +323,8 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       assert name_field["required"] == false
       assert String.contains?(name_field["type"], "String")
 
-      # Test Table.inspect functionality
-      metadata_table = ExIceberg.Table.inspect(table)
+      # Test Table.inspect functionality on renamed table
+      metadata_table = ExIceberg.Table.inspect(renamed_table)
       assert %ExIceberg.Table.MetadataTable{} = metadata_table
 
       # Test SnapshotsTable
@@ -312,7 +335,9 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       manifests_table = ExIceberg.Table.MetadataTable.manifests(metadata_table)
       assert %ExIceberg.Table.ManifestsTable{} = manifests_table
 
-      {:ok, _final_catalog, drop_response} = Catalog.drop_table(catalog, namespace, table_name)
+      {:ok, _final_catalog, drop_response} =
+        Catalog.drop_table(catalog, namespace, new_table_name)
+
       assert is_map(drop_response)
       assert Map.has_key?(drop_response, "table")
     end
@@ -362,6 +387,56 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, _updated_catalog, false} = Catalog.table_exists?(catalog, namespace, table_name)
+    end
+
+    test "rename_table fails for non-existent table" do
+      namespace = generate_unique_name("rename_test")
+      table_name = "non_existent_table"
+      new_table_name = "new_table_name"
+      catalog = Catalog.new("test_catalog", @oauth2_config)
+
+      {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
+
+      {:error, _updated_catalog, reason} =
+        Catalog.rename_table(catalog, namespace, table_name, namespace, new_table_name)
+
+      assert is_binary(reason)
+      assert String.contains?(reason, "Failed to rename table")
+    end
+
+    test "rename_table can move table between namespaces" do
+      src_namespace = generate_unique_name("src_ns")
+      dest_namespace = generate_unique_name("dest_ns")
+      table_name = SimpleSchema.__table_name__()
+      catalog = Catalog.new("test_catalog", @oauth2_config)
+
+      # Create both namespaces
+      {:ok, catalog, _} = Catalog.create_namespace(catalog, src_namespace, %{})
+      {:ok, catalog, _} = Catalog.create_namespace(catalog, dest_namespace, %{})
+
+      # Create table in source namespace
+      {:ok, catalog, _table} =
+        SimpleSchema.create_table(catalog, src_namespace, %{"owner" => "test"})
+
+      # Verify table exists in source namespace
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, src_namespace, table_name)
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, dest_namespace, table_name)
+
+      # Rename/move table to destination namespace
+      {:ok, catalog, rename_response} =
+        Catalog.rename_table(catalog, src_namespace, table_name, dest_namespace, table_name)
+
+      assert is_map(rename_response)
+      assert Map.has_key?(rename_response, "renamed")
+
+      # Verify table no longer exists in source namespace
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, src_namespace, table_name)
+
+      # Verify table exists in destination namespace
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, dest_namespace, table_name)
+
+      # Clean up
+      {:ok, _catalog, _} = Catalog.drop_table(catalog, dest_namespace, table_name)
     end
 
     test "table operations fail with invalid server" do
