@@ -279,4 +279,44 @@ defmodule ExIceberg.Rest.Catalog do
         {:error, catalog, reason}
     end
   end
+
+  @doc """
+  Renames a table in the catalog.
+
+  ## Parameters
+
+  - `catalog` - The catalog struct
+  - `src_namespace` - The source namespace name as a string
+  - `src_table_name` - The source table name as a string
+  - `dest_namespace` - The destination namespace name as a string
+  - `dest_table_name` - The destination table name as a string
+
+  ## Returns
+
+  `{:ok, updated_catalog, response}` - Success with response map
+  `{:error, updated_catalog, reason}` - Error with reason
+
+  ## Examples
+
+      {:ok, catalog, response} = ExIceberg.Rest.Catalog.rename_table(catalog, "my_namespace", "old_table", "my_namespace", "new_table")
+      # response might be %{"renamed" => "my_namespace.old_table -> my_namespace.new_table"}
+  """
+  def rename_table(
+        %__MODULE__{nif_catalog_resource: nif_catalog_resource} = catalog,
+        src_namespace,
+        src_table_name,
+        dest_namespace,
+        dest_table_name
+      ) do
+    case Nif.rest_catalog_rename_table(
+           nif_catalog_resource,
+           src_namespace,
+           src_table_name,
+           dest_namespace,
+           dest_table_name
+         ) do
+      {:ok, response} -> {:ok, catalog, response}
+      {:error, %{"error" => reason}} -> {:error, catalog, reason}
+    end
+  end
 end
