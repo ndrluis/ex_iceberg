@@ -251,7 +251,7 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
   end
 
   describe "table operations" do
-    test "table lifecycle: create, exists, drop" do
+    test "table lifecycle: create, exists, load, drop" do
       namespace = generate_unique_name("table_test")
       table_name = SimpleSchema.__table_name__()
       catalog = Catalog.new("test_catalog", @oauth2_config)
@@ -267,9 +267,50 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
       {:ok, catalog, true} = Catalog.table_exists?(catalog, namespace, table_name)
 
+      # Test load_table
+      {:ok, catalog, table_info} = Catalog.load_table(catalog, namespace, table_name)
+      assert is_map(table_info)
+      assert Map.has_key?(table_info, "table_uuid")
+      assert Map.has_key?(table_info, "format_version")
+      assert Map.has_key?(table_info, "location")
+      assert Map.has_key?(table_info, "schema_id")
+      assert Map.has_key?(table_info, "fields")
+      assert Map.has_key?(table_info, "properties")
+
+      # Verify schema fields
+      fields = table_info["fields"]
+      assert is_list(fields)
+      # id and name fields from SimpleSchema
+      assert length(fields) == 2
+
+      # Check that we have the expected fields
+      field_names = Enum.map(fields, fn field -> field["name"] end)
+      assert "id" in field_names
+      assert "name" in field_names
+
+      # Verify field properties
+      id_field = Enum.find(fields, fn field -> field["name"] == "id" end)
+      assert id_field["required"] == true
+      assert String.contains?(id_field["type"], "Long")
+
+      name_field = Enum.find(fields, fn field -> field["name"] == "name" end)
+      assert name_field["required"] == false
+      assert String.contains?(name_field["type"], "String")
+
       {:ok, _final_catalog, drop_response} = Catalog.drop_table(catalog, namespace, table_name)
       assert is_map(drop_response)
       assert Map.has_key?(drop_response, "table")
+    end
+
+    test "load_table fails for non-existent table" do
+      namespace = generate_unique_name("load_test")
+      table_name = "non_existent_table"
+      catalog = Catalog.new("test_catalog", @oauth2_config)
+
+      {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
+      {:error, _updated_catalog, reason} = Catalog.load_table(catalog, namespace, table_name)
+      assert is_binary(reason)
+      assert String.contains?(reason, "Failed to load table")
     end
 
     test "table_exists returns false for non-existent table" do

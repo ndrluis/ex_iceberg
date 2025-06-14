@@ -53,9 +53,7 @@ impl RestCatalogResource {
                 .uri(self.uri.clone())
                 .props(self.props.clone())
                 .build(),
-            (None, true) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .build(),
+            (None, true) => RestCatalogConfig::builder().uri(self.uri.clone()).build(),
         }
     }
 
@@ -79,7 +77,6 @@ struct CatalogConfigParams {
 
 #[rustler::nif]
 fn rest_catalog_new(config: CatalogConfigParams) -> (Atom, ResourceArc<RestCatalogResource>) {
-    
     // Build properties map for authentication
     let mut props = std::collections::HashMap::new();
 
@@ -109,7 +106,6 @@ fn rest_catalog_new(config: CatalogConfigParams) -> (Atom, ResourceArc<RestCatal
         props.insert("resource".to_string(), resource_val);
     }
 
-    
     // Create resource with config (catalog will be created as needed)
     let resource = RestCatalogResource::new(config.uri, config.warehouse, props);
 
@@ -432,6 +428,75 @@ fn rest_catalog_create_table(
                 "error".to_string(),
                 format!("Failed to create table: {}", e),
             );
+            (atoms::error(), error_response)
+        }
+    }
+}
+
+#[rustler::nif]
+fn rest_catalog_load_table(
+    catalog_resource: ResourceArc<RestCatalogResource>,
+    namespace: String,
+    table_name: String,
+) -> (Atom, HashMap<String, String>) {
+    let runtime = catalog_resource.runtime.clone();
+    let catalog = catalog_resource.get_catalog();
+
+    // Create table identifier
+    let namespace_parts: Vec<&str> = namespace.split('.').collect();
+    let namespace_ident =
+        NamespaceIdent::from_vec(namespace_parts.iter().map(|s| s.to_string()).collect()).unwrap();
+    let table_ident = TableIdent::new(namespace_ident, table_name);
+
+    let result = runtime.block_on(async { catalog.load_table(&table_ident).await });
+
+    match result {
+        Ok(table) => {
+            let metadata = table.metadata();
+            let mut response = HashMap::new();
+
+            // Extract basic table information
+            response.insert("table_uuid".to_string(), metadata.uuid().to_string());
+            response.insert(
+                "format_version".to_string(),
+                format!("{}", metadata.format_version() as u8),
+            );
+            response.insert("location".to_string(), metadata.location().to_string());
+
+            // Schema information
+            let schema = metadata.current_schema();
+            response.insert("schema_id".to_string(), format!("{}", schema.schema_id()));
+
+            // Convert schema fields to JSON string
+            let fields_json = serde_json::to_string(
+                &schema
+                    .as_struct()
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        serde_json::json!({
+                            "id": field.id,
+                            "name": field.name,
+                            "required": field.required,
+                            "type": format!("{:?}", field.field_type)
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or_else(|_| "[]".to_string());
+
+            response.insert("fields".to_string(), fields_json);
+
+            // Properties as JSON string
+            let properties = metadata.properties();
+            let props_json = serde_json::to_string(properties).unwrap_or_else(|_| "{}".to_string());
+            response.insert("properties".to_string(), props_json);
+
+            (atoms::ok(), response)
+        }
+        Err(e) => {
+            let mut error_response = HashMap::new();
+            error_response.insert("error".to_string(), format!("Failed to load table: {}", e));
             (atoms::error(), error_response)
         }
     }
