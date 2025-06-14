@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+* Add load_table functionality to REST catalog for retrieving table metadata and schema information
+
 ### Changed
 * Upgrade iceberg-rust to specific commit bcd1033ba5 for HTTPS protocol support and OAuth2 content-type fix
 * Improve Rust code idiomaticity by refactoring build_config() method to use pattern matching instead of if-else chains

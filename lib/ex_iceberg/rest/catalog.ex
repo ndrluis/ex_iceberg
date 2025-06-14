@@ -238,4 +238,47 @@ defmodule ExIceberg.Rest.Catalog do
       {:error, %{"error" => reason}} -> {:error, catalog, reason}
     end
   end
+
+  @doc """
+  Loads a table from the catalog.
+
+  ## Parameters
+
+  - `catalog` - The catalog struct
+  - `namespace` - The namespace name as a string
+  - `table_name` - The table name as a string
+
+  ## Returns
+
+  `{:ok, updated_catalog, table_info}` - Success with table metadata map
+  `{:error, updated_catalog, reason}` - Error with reason
+
+  ## Examples
+
+      {:ok, catalog, table_info} = ExIceberg.Rest.Catalog.load_table(catalog, "my_namespace", "my_table")
+      # table_info contains schema, properties, location, etc.
+  """
+  def load_table(
+        %__MODULE__{nif_catalog_resource: nif_catalog_resource} = catalog,
+        namespace,
+        table_name
+      ) do
+    case Nif.rest_catalog_load_table(nif_catalog_resource, namespace, table_name) do
+      {:ok, table_info} ->
+        # Parse JSON strings back to Elixir terms for easier consumption
+        parsed_info = %{
+          "table_uuid" => table_info["table_uuid"],
+          "format_version" => String.to_integer(table_info["format_version"]),
+          "location" => table_info["location"],
+          "schema_id" => String.to_integer(table_info["schema_id"]),
+          "fields" => Jason.decode!(table_info["fields"]),
+          "properties" => Jason.decode!(table_info["properties"])
+        }
+
+        {:ok, catalog, parsed_info}
+
+      {:error, %{"error" => reason}} ->
+        {:error, catalog, reason}
+    end
+  end
 end

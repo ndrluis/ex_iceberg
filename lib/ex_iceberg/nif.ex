@@ -37,4 +37,7 @@ defmodule ExIceberg.Nif do
 
   def rest_catalog_create_table(_catalog_resource, _namespace, _table_name, _fields, _properties),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  def rest_catalog_load_table(_catalog_resource, _namespace, _table_name),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
