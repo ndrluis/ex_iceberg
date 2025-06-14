@@ -259,26 +259,29 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
       {:ok, catalog, false} = Catalog.table_exists?(catalog, namespace, table_name)
 
-      {:ok, catalog, response} =
+      {:ok, catalog, table} =
         SimpleSchema.create_table(catalog, namespace, %{"owner" => "test"})
 
-      assert is_map(response)
-      assert Map.has_key?(response, "table")
+      assert %ExIceberg.Table{} = table
 
       {:ok, catalog, true} = Catalog.table_exists?(catalog, namespace, table_name)
 
       # Test load_table
-      {:ok, catalog, table_info} = Catalog.load_table(catalog, namespace, table_name)
-      assert is_map(table_info)
-      assert Map.has_key?(table_info, "table_uuid")
-      assert Map.has_key?(table_info, "format_version")
-      assert Map.has_key?(table_info, "location")
-      assert Map.has_key?(table_info, "schema_id")
-      assert Map.has_key?(table_info, "fields")
-      assert Map.has_key?(table_info, "properties")
+      {:ok, catalog, table} = Catalog.load_table(catalog, namespace, table_name)
+      assert %ExIceberg.Table{} = table
+
+      # Get metadata from table
+      table_metadata = ExIceberg.Table.metadata(table)
+      assert is_map(table_metadata)
+      assert Map.has_key?(table_metadata, "table_uuid")
+      assert Map.has_key?(table_metadata, "format_version")
+      assert Map.has_key?(table_metadata, "location")
+      assert Map.has_key?(table_metadata, "schema_id")
+      assert Map.has_key?(table_metadata, "fields")
+      assert Map.has_key?(table_metadata, "properties")
 
       # Verify schema fields
-      fields = table_info["fields"]
+      fields = table_metadata["fields"]
       assert is_list(fields)
       # id and name fields from SimpleSchema
       assert length(fields) == 2
@@ -297,9 +300,49 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       assert name_field["required"] == false
       assert String.contains?(name_field["type"], "String")
 
+      # Test Table.inspect functionality
+      metadata_table = ExIceberg.Table.inspect(table)
+      assert %ExIceberg.Table.MetadataTable{} = metadata_table
+
+      # Test SnapshotsTable
+      snapshots_table = ExIceberg.Table.MetadataTable.snapshots(metadata_table)
+      assert %ExIceberg.Table.SnapshotsTable{} = snapshots_table
+
+      # Test ManifestsTable
+      manifests_table = ExIceberg.Table.MetadataTable.manifests(metadata_table)
+      assert %ExIceberg.Table.ManifestsTable{} = manifests_table
+
       {:ok, _final_catalog, drop_response} = Catalog.drop_table(catalog, namespace, table_name)
       assert is_map(drop_response)
       assert Map.has_key?(drop_response, "table")
+    end
+
+    test "table metadata caching and invalidation" do
+      namespace = generate_unique_name("cache_test")
+      table_name = SimpleSchema.__table_name__()
+      catalog = Catalog.new("test_catalog", @oauth2_config)
+
+      {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
+      {:ok, catalog, table} = SimpleSchema.create_table(catalog, namespace, %{})
+
+      # First call - fetches from catalog
+      metadata1 = ExIceberg.Table.metadata(table)
+      assert is_map(metadata1)
+
+      # Second call - should use cache (fast)
+      metadata2 = ExIceberg.Table.metadata(table)
+      assert metadata1 == metadata2
+
+      # Invalidate cache
+      ExIceberg.Table.invalidate_cache(table)
+
+      # Next call - fetches fresh from catalog
+      metadata3 = ExIceberg.Table.metadata(table)
+      # Content should be same, but was fetched fresh
+      assert metadata1 == metadata3
+
+      # Clean up
+      {:ok, _catalog, _} = Catalog.drop_table(catalog, namespace, table_name)
     end
 
     test "load_table fails for non-existent table" do
@@ -339,12 +382,11 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
-      {:ok, updated_catalog, response} =
+      {:ok, updated_catalog, table} =
         PrimitiveTypesSchema.create_table(catalog, namespace, %{"test" => "primitive_types"})
 
       assert %Catalog{} = updated_catalog
-      assert is_map(response)
-      assert Map.has_key?(response, "table")
+      assert %ExIceberg.Table{} = table
     end
 
     test "create table with parametric types" do
@@ -353,12 +395,11 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
-      {:ok, updated_catalog, response} =
+      {:ok, updated_catalog, table} =
         ParametricTypesSchema.create_table(catalog, namespace, %{"test" => "parametric_types"})
 
       assert %Catalog{} = updated_catalog
-      assert is_map(response)
-      assert Map.has_key?(response, "table")
+      assert %ExIceberg.Table{} = table
     end
 
     test "create table with complex types" do
@@ -367,12 +408,11 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
-      {:ok, updated_catalog, response} =
+      {:ok, updated_catalog, table} =
         ComplexTypesSchema.create_table(catalog, namespace, %{"test" => "complex_types"})
 
       assert %Catalog{} = updated_catalog
-      assert is_map(response)
-      assert Map.has_key?(response, "table")
+      assert %ExIceberg.Table{} = table
     end
 
     test "create table fails with invalid server" do

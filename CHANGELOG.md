@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-* Add load_table functionality to REST catalog for retrieving table metadata and schema information
+* Add Table module with metadata access and inspection capabilities
+* Add MetadataTable module for table inspection (snapshots, manifests)
+* Add SnapshotsTable and ManifestsTable modules for metadata inspection
+* Add load_table functionality to REST catalog returning Table instances
 
 ### Changed
 * Upgrade iceberg-rust to specific commit bcd1033ba5 for HTTPS protocol support and OAuth2 content-type fix

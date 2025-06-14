@@ -40,4 +40,10 @@ defmodule ExIceberg.Nif do
 
   def rest_catalog_load_table(_catalog_resource, _namespace, _table_name),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  # Table operations using SmartTableResource
+  def table_metadata(_table_resource), do: :erlang.nif_error(:nif_not_loaded)
+  def table_metadata_ref(_table_resource), do: :erlang.nif_error(:nif_not_loaded)
+  def table_inspect(_table_resource), do: :erlang.nif_error(:nif_not_loaded)
+  def table_invalidate_cache(_table_resource), do: :erlang.nif_error(:nif_not_loaded)
 end

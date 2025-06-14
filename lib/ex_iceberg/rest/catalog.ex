@@ -47,8 +47,11 @@ defmodule ExIceberg.Rest.Catalog do
   def new(name, config) do
     config = struct(CatalogConfig, config)
 
-    # Create REST catalog using Rust NIFs (delegating to existing implementation)
-    {:ok, nif_catalog_resource} = Nif.rest_catalog_new(config)
+    nif_catalog_resource =
+      case Nif.rest_catalog_new(config) do
+        {:ok, nif_catalog_resource} -> nif_catalog_resource
+        {:error, reason} -> raise "Failed to create catalog: #{inspect(reason)}"
+      end
 
     %__MODULE__{
       name: name,
@@ -184,7 +187,7 @@ defmodule ExIceberg.Rest.Catalog do
 
   ## Returns
 
-  `{:ok, updated_catalog, response}` - Success with response map
+  `{:ok, updated_catalog, table}` - Success with Table struct
   `{:error, updated_catalog, reason}` - Error with reason
 
   ## Note
@@ -218,7 +221,7 @@ defmodule ExIceberg.Rest.Catalog do
         ]))
       ]
 
-      {:ok, catalog, response} = ExIceberg.Rest.Catalog.create_table(catalog, "my_namespace", "my_table", fields, %{"owner" => "test"})
+      {:ok, catalog, table} = ExIceberg.Rest.Catalog.create_table(catalog, "my_namespace", "my_table", fields, %{"owner" => "test"})
   """
   def create_table(
         %__MODULE__{nif_catalog_resource: nif_catalog_resource} = catalog,
@@ -234,8 +237,12 @@ defmodule ExIceberg.Rest.Catalog do
            fields,
            properties
          ) do
-      {:ok, response} -> {:ok, catalog, response}
-      {:error, %{"error" => reason}} -> {:error, catalog, reason}
+      {:ok, table_resource} ->
+        table = ExIceberg.Table.new(table_resource)
+        {:ok, catalog, table}
+
+      {:error, reason} ->
+        {:error, catalog, reason}
     end
   end
 
@@ -264,20 +271,11 @@ defmodule ExIceberg.Rest.Catalog do
         table_name
       ) do
     case Nif.rest_catalog_load_table(nif_catalog_resource, namespace, table_name) do
-      {:ok, table_info} ->
-        # Parse JSON strings back to Elixir terms for easier consumption
-        parsed_info = %{
-          "table_uuid" => table_info["table_uuid"],
-          "format_version" => String.to_integer(table_info["format_version"]),
-          "location" => table_info["location"],
-          "schema_id" => String.to_integer(table_info["schema_id"]),
-          "fields" => Jason.decode!(table_info["fields"]),
-          "properties" => Jason.decode!(table_info["properties"])
-        }
+      {:ok, table_resource} ->
+        table = ExIceberg.Table.new(table_resource)
+        {:ok, catalog, table}
 
-        {:ok, catalog, parsed_info}
-
-      {:error, %{"error" => reason}} ->
+      {:error, reason} ->
         {:error, catalog, reason}
     end
   end
