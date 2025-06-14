@@ -16,7 +16,9 @@ mod atoms {
 }
 
 pub struct RestCatalogResource {
-    config: RestCatalogConfig,
+    uri: String,
+    warehouse: Option<String>,
+    props: HashMap<String, String>,
     runtime: Arc<Runtime>,
 }
 
@@ -27,15 +29,38 @@ unsafe impl Sync for RestCatalogResource {}
 impl Resource for RestCatalogResource {}
 
 impl RestCatalogResource {
-    fn new(config: RestCatalogConfig) -> Self {
+    fn new(uri: String, warehouse: Option<String>, props: HashMap<String, String>) -> Self {
         Self {
-            config,
+            uri,
+            warehouse,
+            props,
             runtime: Arc::new(Runtime::new().unwrap()),
         }
     }
 
+    fn build_config(&self) -> RestCatalogConfig {
+        match (&self.warehouse, self.props.is_empty()) {
+            (Some(warehouse), false) => RestCatalogConfig::builder()
+                .uri(self.uri.clone())
+                .warehouse(warehouse.clone())
+                .props(self.props.clone())
+                .build(),
+            (Some(warehouse), true) => RestCatalogConfig::builder()
+                .uri(self.uri.clone())
+                .warehouse(warehouse.clone())
+                .build(),
+            (None, false) => RestCatalogConfig::builder()
+                .uri(self.uri.clone())
+                .props(self.props.clone())
+                .build(),
+            (None, true) => RestCatalogConfig::builder()
+                .uri(self.uri.clone())
+                .build(),
+        }
+    }
+
     fn get_catalog(&self) -> RestCatalog {
-        RestCatalog::new(self.config.clone())
+        RestCatalog::new(self.build_config())
     }
 }
 
@@ -54,6 +79,7 @@ struct CatalogConfigParams {
 
 #[rustler::nif]
 fn rest_catalog_new(config: CatalogConfigParams) -> (Atom, ResourceArc<RestCatalogResource>) {
+    
     // Build properties map for authentication
     let mut props = std::collections::HashMap::new();
 
@@ -83,31 +109,9 @@ fn rest_catalog_new(config: CatalogConfigParams) -> (Atom, ResourceArc<RestCatal
         props.insert("resource".to_string(), resource_val);
     }
 
-    // Build RestCatalogConfig
-    let catalog_config = if let Some(warehouse_name) = config.warehouse {
-        if !props.is_empty() {
-            RestCatalogConfig::builder()
-                .uri(config.uri)
-                .warehouse(warehouse_name)
-                .props(props)
-                .build()
-        } else {
-            RestCatalogConfig::builder()
-                .uri(config.uri)
-                .warehouse(warehouse_name)
-                .build()
-        }
-    } else if !props.is_empty() {
-        RestCatalogConfig::builder()
-            .uri(config.uri)
-            .props(props)
-            .build()
-    } else {
-        RestCatalogConfig::builder().uri(config.uri).build()
-    };
-
+    
     // Create resource with config (catalog will be created as needed)
-    let resource = RestCatalogResource::new(catalog_config);
+    let resource = RestCatalogResource::new(config.uri, config.warehouse, props);
 
     (atoms::ok(), ResourceArc::new(resource))
 }
