@@ -418,3 +418,57 @@ pub fn rest_catalog_load_table(
         Err(e) => TableResult::Error(format!("Failed to load table: {}", e)),
     }
 }
+
+#[rustler::nif]
+pub fn rest_catalog_rename_table(
+    catalog_resource: ResourceArc<RestCatalogResource>,
+    src_namespace: String,
+    src_table_name: String,
+    dest_namespace: String,
+    dest_table_name: String,
+) -> (Atom, HashMap<String, String>) {
+    let runtime = catalog_resource.runtime.clone();
+    let catalog = catalog_resource.get_catalog();
+
+    // Create source table identifier
+    let src_namespace_parts: Vec<&str> = src_namespace.split('.').collect();
+    let src_namespace_ident =
+        NamespaceIdent::from_vec(src_namespace_parts.iter().map(|s| s.to_string()).collect())
+            .unwrap();
+    let src_table_ident = TableIdent::new(src_namespace_ident, src_table_name.clone());
+
+    // Create destination table identifier
+    let dest_namespace_parts: Vec<&str> = dest_namespace.split('.').collect();
+    let dest_namespace_ident =
+        NamespaceIdent::from_vec(dest_namespace_parts.iter().map(|s| s.to_string()).collect())
+            .unwrap();
+    let dest_table_ident = TableIdent::new(dest_namespace_ident, dest_table_name.clone());
+
+    let result = runtime.block_on(async {
+        catalog
+            .rename_table(&src_table_ident, &dest_table_ident)
+            .await
+    });
+
+    match result {
+        Ok(()) => {
+            let mut response = HashMap::new();
+            response.insert(
+                "renamed".to_string(),
+                format!(
+                    "{}.{} -> {}.{}",
+                    src_namespace, src_table_name, dest_namespace, dest_table_name
+                ),
+            );
+            (atoms::ok(), response)
+        }
+        Err(e) => {
+            let mut error_response = HashMap::new();
+            error_response.insert(
+                "error".to_string(),
+                format!("Failed to rename table: {}", e),
+            );
+            (atoms::error(), error_response)
+        }
+    }
+}

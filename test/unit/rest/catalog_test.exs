@@ -33,4 +33,29 @@ defmodule ExIceberg.Rest.CatalogTest do
       assert is_reference(catalog.nif_catalog_resource)
     end
   end
+
+  describe "rename_table/5" do
+    setup do
+      config = %{uri: "http://localhost:8181"}
+      catalog = Catalog.new("test", config)
+      {:ok, catalog: catalog}
+    end
+
+    test "returns error tuple when catalog is offline", %{catalog: catalog} do
+      result = Catalog.rename_table(catalog, "namespace", "old_table", "namespace", "new_table")
+
+      assert {:error, ^catalog, reason} = result
+      assert is_binary(reason)
+      assert String.contains?(reason, "Failed to rename table")
+    end
+
+    test "validates function signature", %{catalog: catalog} do
+      # Test that the function accepts the correct parameters
+      assert function_exported?(Catalog, :rename_table, 5)
+
+      # Test parameter structure
+      result = Catalog.rename_table(catalog, "ns1", "table1", "ns2", "table2")
+      assert match?({:error, _, _}, result)
+    end
+  end
 end
