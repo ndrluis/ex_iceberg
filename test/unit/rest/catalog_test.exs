@@ -2,6 +2,7 @@ defmodule ExIceberg.Rest.CatalogTest do
   use ExUnit.Case, async: true
 
   alias ExIceberg.Rest.Catalog
+  alias ExIceberg.TableIdent
 
   describe "new/2" do
     test "creates a catalog with basic config" do
@@ -34,7 +35,7 @@ defmodule ExIceberg.Rest.CatalogTest do
     end
   end
 
-  describe "rename_table/5" do
+  describe "rename_table/3" do
     setup do
       config = %{uri: "http://localhost:8181"}
       catalog = Catalog.new("test", config)
@@ -42,7 +43,10 @@ defmodule ExIceberg.Rest.CatalogTest do
     end
 
     test "returns error tuple when catalog is offline", %{catalog: catalog} do
-      result = Catalog.rename_table(catalog, "namespace", "old_table", "namespace", "new_table")
+      src_ident = TableIdent.from_string("namespace.old_table")
+      dest_ident = TableIdent.from_string("namespace.new_table")
+
+      result = Catalog.rename_table(catalog, src_ident, dest_ident)
 
       assert {:error, ^catalog, reason} = result
       assert is_binary(reason)
@@ -51,10 +55,13 @@ defmodule ExIceberg.Rest.CatalogTest do
 
     test "validates function signature", %{catalog: catalog} do
       # Test that the function accepts the correct parameters
-      assert function_exported?(Catalog, :rename_table, 5)
+      assert function_exported?(Catalog, :rename_table, 3)
 
-      # Test parameter structure
-      result = Catalog.rename_table(catalog, "ns1", "table1", "ns2", "table2")
+      # Test parameter structure with structured identifiers
+      src_ident = TableIdent.from_string("ns1.table1")
+      dest_ident = TableIdent.from_string("ns2.table2")
+
+      result = Catalog.rename_table(catalog, src_ident, dest_ident)
       assert match?({:error, _, _}, result)
     end
   end

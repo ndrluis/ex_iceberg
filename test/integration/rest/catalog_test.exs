@@ -1,6 +1,7 @@
 defmodule ExIceberg.Rest.CatalogIntegrationTest do
   use ExUnit.Case, async: true
   alias ExIceberg.Rest.Catalog
+  alias ExIceberg.{NamespaceIdent, TableIdent}
 
   @moduletag :integration
 
@@ -190,7 +191,7 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       {:ok, %Catalog{} = updated_catalog, namespaces} = Catalog.list_namespaces(catalog)
       assert %Catalog{} = updated_catalog
       assert is_list(namespaces)
-      assert Enum.all?(namespaces, &is_binary/1)
+      assert Enum.all?(namespaces, &match?(%NamespaceIdent{}, &1))
       assert length(namespaces) >= 0
     end
 
@@ -207,20 +208,21 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "create_namespace/3" do
     test "successfully creates a new namespace" do
-      namespace = generate_unique_name("test_namespace")
+      namespace_name = generate_unique_name("test_namespace")
+      namespace = NamespaceIdent.new(namespace_name)
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, %Catalog{} = updated_catalog, response} =
         Catalog.create_namespace(catalog, namespace, %{})
 
       assert %Catalog{} = updated_catalog
-      assert is_map(response)
-      assert Map.has_key?(response, "namespace")
-      assert response["namespace"] == [namespace]
+      assert %NamespaceIdent{} = response
+      assert response.parts == [namespace_name]
     end
 
     test "handles server connection errors when creating namespace" do
-      namespace = generate_unique_name("test_namespace")
+      namespace_name = generate_unique_name("test_namespace")
+      namespace = NamespaceIdent.new(namespace_name)
       invalid_config = %{uri: "http://invalid-host:9999", warehouse: "demo"}
       catalog = Catalog.new("test_catalog", invalid_config)
 
@@ -233,7 +235,8 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
     end
 
     test "handles duplicate namespace creation" do
-      namespace = generate_unique_name("duplicate_namespace")
+      namespace_name = generate_unique_name("duplicate_namespace")
+      namespace = NamespaceIdent.new(namespace_name)
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, updated_catalog, _response} = Catalog.create_namespace(catalog, namespace, %{})
@@ -252,45 +255,50 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
 
   describe "table operations" do
     test "table lifecycle: create, exists, load, rename, drop" do
-      namespace = generate_unique_name("table_test")
+      namespace_name = generate_unique_name("table_test")
+      namespace = NamespaceIdent.new(namespace_name)
       table_name = SimpleSchema.__table_name__()
       new_table_name = "#{table_name}_renamed"
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
-      {:ok, catalog, false} = Catalog.table_exists?(catalog, namespace, table_name)
+
+      table_ident = TableIdent.new(namespace, table_name)
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, table_ident)
 
       {:ok, catalog, table} =
-        SimpleSchema.create_table(catalog, namespace, %{"owner" => "test"})
+        SimpleSchema.create_table(catalog, table_ident, %{"owner" => "test"})
 
       assert %ExIceberg.Table{} = table
 
-      {:ok, catalog, true} = Catalog.table_exists?(catalog, namespace, table_name)
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, table_ident)
 
       # Test load_table
-      {:ok, catalog, table} = Catalog.load_table(catalog, namespace, table_name)
+      {:ok, catalog, table} = Catalog.load_table(catalog, table_ident)
       assert %ExIceberg.Table{} = table
 
       # Test rename_table
+      new_table_ident = TableIdent.new(namespace, new_table_name)
+
       {:ok, catalog, rename_response} =
-        Catalog.rename_table(catalog, namespace, table_name, namespace, new_table_name)
+        Catalog.rename_table(catalog, table_ident, new_table_ident)
 
       assert is_map(rename_response)
       assert Map.has_key?(rename_response, "renamed")
 
       assert String.contains?(
                rename_response["renamed"],
-               "#{namespace}.#{table_name} -> #{namespace}.#{new_table_name}"
+               "#{namespace_name}.#{table_name} -> #{namespace_name}.#{new_table_name}"
              )
 
       # Verify original table no longer exists
-      {:ok, catalog, false} = Catalog.table_exists?(catalog, namespace, table_name)
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, table_ident)
 
       # Verify renamed table exists
-      {:ok, catalog, true} = Catalog.table_exists?(catalog, namespace, new_table_name)
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, new_table_ident)
 
       # Load the renamed table to test metadata
-      {:ok, catalog, renamed_table} = Catalog.load_table(catalog, namespace, new_table_name)
+      {:ok, catalog, renamed_table} = Catalog.load_table(catalog, new_table_ident)
       assert %ExIceberg.Table{} = renamed_table
 
       # Get metadata from renamed table
@@ -336,19 +344,21 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       assert %ExIceberg.Table.ManifestsTable{} = manifests_table
 
       {:ok, _final_catalog, drop_response} =
-        Catalog.drop_table(catalog, namespace, new_table_name)
+        Catalog.drop_table(catalog, new_table_ident)
 
-      assert is_map(drop_response)
-      assert Map.has_key?(drop_response, "table")
+      assert %TableIdent{} = drop_response
+      assert drop_response == new_table_ident
     end
 
     test "table metadata caching and invalidation" do
-      namespace = generate_unique_name("cache_test")
+      namespace_name = generate_unique_name("cache_test")
+      namespace = NamespaceIdent.new(namespace_name)
       table_name = SimpleSchema.__table_name__()
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
-      {:ok, catalog, table} = SimpleSchema.create_table(catalog, namespace, %{})
+      table_ident = TableIdent.new(namespace, table_name)
+      {:ok, catalog, table} = SimpleSchema.create_table(catalog, table_ident, %{})
 
       # First call - fetches from catalog
       metadata1 = ExIceberg.Table.metadata(table)
@@ -367,46 +377,56 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       assert metadata1 == metadata3
 
       # Clean up
-      {:ok, _catalog, _} = Catalog.drop_table(catalog, namespace, table_name)
+      {:ok, _catalog, _} = Catalog.drop_table(catalog, table_ident)
     end
 
     test "load_table fails for non-existent table" do
-      namespace = generate_unique_name("load_test")
+      namespace_name = generate_unique_name("load_test")
+      namespace = NamespaceIdent.new(namespace_name)
       table_name = "non_existent_table"
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
-      {:error, _updated_catalog, reason} = Catalog.load_table(catalog, namespace, table_name)
+      table_ident = TableIdent.new(namespace, table_name)
+      {:error, _updated_catalog, reason} = Catalog.load_table(catalog, table_ident)
       assert is_binary(reason)
       assert String.contains?(reason, "Failed to load table")
     end
 
     test "table_exists returns false for non-existent table" do
-      namespace = generate_unique_name("nonexist_test")
+      namespace_name = generate_unique_name("nonexist_test")
+      namespace = NamespaceIdent.new(namespace_name)
       table_name = "non_existent_table"
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
-      {:ok, _updated_catalog, false} = Catalog.table_exists?(catalog, namespace, table_name)
+      table_ident = TableIdent.new(namespace, table_name)
+      {:ok, _updated_catalog, false} = Catalog.table_exists?(catalog, table_ident)
     end
 
     test "rename_table fails for non-existent table" do
-      namespace = generate_unique_name("rename_test")
+      namespace_name = generate_unique_name("rename_test")
+      namespace = NamespaceIdent.new(namespace_name)
       table_name = "non_existent_table"
       new_table_name = "new_table_name"
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
+      src_table_ident = TableIdent.new(namespace, table_name)
+      dest_table_ident = TableIdent.new(namespace, new_table_name)
+
       {:error, _updated_catalog, reason} =
-        Catalog.rename_table(catalog, namespace, table_name, namespace, new_table_name)
+        Catalog.rename_table(catalog, src_table_ident, dest_table_ident)
 
       assert is_binary(reason)
       assert String.contains?(reason, "Failed to rename table")
     end
 
     test "rename_table can move table between namespaces" do
-      src_namespace = generate_unique_name("src_ns")
-      dest_namespace = generate_unique_name("dest_ns")
+      src_namespace_name = generate_unique_name("src_ns")
+      dest_namespace_name = generate_unique_name("dest_ns")
+      src_namespace = NamespaceIdent.new(src_namespace_name)
+      dest_namespace = NamespaceIdent.new(dest_namespace_name)
       table_name = SimpleSchema.__table_name__()
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
@@ -415,88 +435,105 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       {:ok, catalog, _} = Catalog.create_namespace(catalog, dest_namespace, %{})
 
       # Create table in source namespace
+      src_table_ident = TableIdent.new(src_namespace, table_name)
+
       {:ok, catalog, _table} =
-        SimpleSchema.create_table(catalog, src_namespace, %{"owner" => "test"})
+        SimpleSchema.create_table(catalog, src_table_ident, %{"owner" => "test"})
 
       # Verify table exists in source namespace
-      {:ok, catalog, true} = Catalog.table_exists?(catalog, src_namespace, table_name)
-      {:ok, catalog, false} = Catalog.table_exists?(catalog, dest_namespace, table_name)
+      dest_table_ident = TableIdent.new(dest_namespace, table_name)
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, src_table_ident)
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, dest_table_ident)
 
       # Rename/move table to destination namespace
       {:ok, catalog, rename_response} =
-        Catalog.rename_table(catalog, src_namespace, table_name, dest_namespace, table_name)
+        Catalog.rename_table(catalog, src_table_ident, dest_table_ident)
 
       assert is_map(rename_response)
       assert Map.has_key?(rename_response, "renamed")
 
       # Verify table no longer exists in source namespace
-      {:ok, catalog, false} = Catalog.table_exists?(catalog, src_namespace, table_name)
+      {:ok, catalog, false} = Catalog.table_exists?(catalog, src_table_ident)
 
       # Verify table exists in destination namespace
-      {:ok, catalog, true} = Catalog.table_exists?(catalog, dest_namespace, table_name)
+      {:ok, catalog, true} = Catalog.table_exists?(catalog, dest_table_ident)
 
       # Clean up
-      {:ok, _catalog, _} = Catalog.drop_table(catalog, dest_namespace, table_name)
+      {:ok, _catalog, _} = Catalog.drop_table(catalog, dest_table_ident)
     end
 
     test "table operations fail with invalid server" do
-      namespace = generate_unique_name("table_test")
+      namespace_name = generate_unique_name("table_test")
+      namespace = NamespaceIdent.new(namespace_name)
       table_name = SimpleSchema.__table_name__()
       invalid_config = %{uri: "http://invalid-host:9999", warehouse: "demo"}
       catalog = Catalog.new("test_catalog", invalid_config)
 
-      {:error, _catalog, reason} = Catalog.table_exists?(catalog, namespace, table_name)
+      table_ident = TableIdent.new(namespace, table_name)
+      {:error, _catalog, reason} = Catalog.table_exists?(catalog, table_ident)
       assert is_binary(reason)
     end
   end
 
   describe "schema-based type support" do
     test "create table with all primitive types" do
-      namespace = generate_unique_name("primitive_test")
+      namespace_name = generate_unique_name("primitive_test")
+      namespace = NamespaceIdent.new(namespace_name)
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
+      table_ident = TableIdent.new(namespace, PrimitiveTypesSchema.__table_name__())
+
       {:ok, updated_catalog, table} =
-        PrimitiveTypesSchema.create_table(catalog, namespace, %{"test" => "primitive_types"})
+        PrimitiveTypesSchema.create_table(catalog, table_ident, %{"test" => "primitive_types"})
 
       assert %Catalog{} = updated_catalog
       assert %ExIceberg.Table{} = table
     end
 
     test "create table with parametric types" do
-      namespace = generate_unique_name("parametric_test")
+      namespace_name = generate_unique_name("parametric_test")
+      namespace = NamespaceIdent.new(namespace_name)
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
+      table_ident = TableIdent.new(namespace, ParametricTypesSchema.__table_name__())
+
       {:ok, updated_catalog, table} =
-        ParametricTypesSchema.create_table(catalog, namespace, %{"test" => "parametric_types"})
+        ParametricTypesSchema.create_table(catalog, table_ident, %{"test" => "parametric_types"})
 
       assert %Catalog{} = updated_catalog
       assert %ExIceberg.Table{} = table
     end
 
     test "create table with complex types" do
-      namespace = generate_unique_name("complex_test")
+      namespace_name = generate_unique_name("complex_test")
+      namespace = NamespaceIdent.new(namespace_name)
       catalog = Catalog.new("test_catalog", @oauth2_config)
 
       {:ok, catalog, _} = Catalog.create_namespace(catalog, namespace, %{})
 
+      table_ident = TableIdent.new(namespace, ComplexTypesSchema.__table_name__())
+
       {:ok, updated_catalog, table} =
-        ComplexTypesSchema.create_table(catalog, namespace, %{"test" => "complex_types"})
+        ComplexTypesSchema.create_table(catalog, table_ident, %{"test" => "complex_types"})
 
       assert %Catalog{} = updated_catalog
       assert %ExIceberg.Table{} = table
     end
 
     test "create table fails with invalid server" do
-      namespace = generate_unique_name("primitive_test")
+      namespace_name = generate_unique_name("primitive_test")
+      namespace = NamespaceIdent.new(namespace_name)
       invalid_config = %{uri: "http://invalid-host:9999", warehouse: "demo"}
       catalog = Catalog.new("test_catalog", invalid_config)
 
+      table_ident = TableIdent.new(namespace, PrimitiveTypesSchema.__table_name__())
+
       {:error, _catalog, reason} =
-        PrimitiveTypesSchema.create_table(catalog, namespace, %{"test" => "primitive_types"})
+        PrimitiveTypesSchema.create_table(catalog, table_ident, %{"test" => "primitive_types"})
 
       assert is_binary(reason)
     end
@@ -525,7 +562,7 @@ defmodule ExIceberg.Rest.CatalogIntegrationTest do
       {:ok, %Catalog{} = updated_catalog, namespaces} = Catalog.list_namespaces(catalog)
       assert %Catalog{} = updated_catalog
       assert is_list(namespaces)
-      assert Enum.all?(namespaces, &is_binary/1)
+      assert Enum.all?(namespaces, &match?(%NamespaceIdent{}, &1))
     end
 
     test "OAuth2 catalog fails with invalid server" do

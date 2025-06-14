@@ -9,7 +9,34 @@ use iceberg_catalog_rest::{RestCatalog, RestCatalogConfig};
 
 use crate::atoms;
 use crate::table::SmartTableResource;
-use crate::types::{IcebergField, IcebergFieldType};
+use crate::types::{ElixirNamespaceIdent, ElixirTableIdent, IcebergField, IcebergFieldType};
+
+impl From<ElixirNamespaceIdent> for NamespaceIdent {
+    fn from(elixir_ns: ElixirNamespaceIdent) -> Self {
+        NamespaceIdent::from_vec(elixir_ns.parts).expect("Invalid namespace")
+    }
+}
+
+impl From<NamespaceIdent> for ElixirNamespaceIdent {
+    fn from(ns: NamespaceIdent) -> Self {
+        ElixirNamespaceIdent { parts: ns.inner() }
+    }
+}
+
+impl From<ElixirTableIdent> for TableIdent {
+    fn from(elixir_table: ElixirTableIdent) -> Self {
+        TableIdent::new(elixir_table.namespace.into(), elixir_table.name)
+    }
+}
+
+impl From<TableIdent> for ElixirTableIdent {
+    fn from(table: TableIdent) -> Self {
+        ElixirTableIdent {
+            namespace: table.namespace().clone().into(),
+            name: table.name().to_string(),
+        }
+    }
+}
 
 // REST Catalog Resource for wrapping iceberg-rust RestCatalog
 pub struct RestCatalogResource {
@@ -115,7 +142,7 @@ pub fn rest_catalog_new(config: CatalogConfig) -> (Atom, ResourceArc<RestCatalog
 #[rustler::nif]
 pub fn rest_catalog_list_namespaces(
     catalog_resource: ResourceArc<RestCatalogResource>,
-) -> (Atom, Vec<String>) {
+) -> (Atom, Vec<ElixirNamespaceIdent>) {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
 
@@ -123,15 +150,18 @@ pub fn rest_catalog_list_namespaces(
 
     match result {
         Ok(namespaces) => {
-            let namespace_names: Vec<String> = namespaces
-                .into_iter()
-                .map(|ns| ns.as_ref().join("."))
-                .collect();
-            (atoms::ok(), namespace_names)
+            let elixir_namespaces: Vec<ElixirNamespaceIdent> =
+                namespaces.into_iter().map(|ns| ns.into()).collect();
+            (atoms::ok(), elixir_namespaces)
         }
         Err(e) => {
             let error_msg = format!("Failed to list namespaces: {}", e);
-            (atoms::error(), vec![error_msg])
+            (
+                atoms::error(),
+                vec![ElixirNamespaceIdent {
+                    parts: vec![error_msg],
+                }],
+            )
         }
     }
 }
@@ -139,35 +169,27 @@ pub fn rest_catalog_list_namespaces(
 #[rustler::nif]
 pub fn rest_catalog_create_namespace(
     catalog_resource: ResourceArc<RestCatalogResource>,
-    namespace: String,
+    namespace: ElixirNamespaceIdent,
     properties: HashMap<String, String>,
-) -> (Atom, HashMap<String, Vec<String>>) {
+) -> (Atom, ElixirNamespaceIdent) {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
 
-    let namespace_parts: Vec<&str> = namespace.split('.').collect();
-    let namespace_ident =
-        NamespaceIdent::from_vec(namespace_parts.iter().map(|s| s.to_string()).collect()).unwrap();
+    let namespace_ident: NamespaceIdent = namespace.into();
 
     let result =
         runtime.block_on(async { catalog.create_namespace(&namespace_ident, properties).await });
 
     match result {
         Ok(namespace_obj) => {
-            let mut response = HashMap::new();
-            response.insert(
-                "namespace".to_string(),
-                namespace_obj.name().as_ref().to_vec(),
-            );
-            (atoms::ok(), response)
+            let elixir_namespace: ElixirNamespaceIdent = namespace_obj.name().clone().into();
+            (atoms::ok(), elixir_namespace)
         }
         Err(e) => {
-            let mut error_response = HashMap::new();
-            error_response.insert(
-                "error".to_string(),
-                vec![format!("Failed to create namespace: {}", e)],
-            );
-            (atoms::error(), error_response)
+            let error_namespace = ElixirNamespaceIdent {
+                parts: vec![format!("Failed to create namespace: {}", e)],
+            };
+            (atoms::error(), error_namespace)
         }
     }
 }
@@ -175,16 +197,12 @@ pub fn rest_catalog_create_namespace(
 #[rustler::nif]
 pub fn rest_catalog_table_exists(
     catalog_resource: ResourceArc<RestCatalogResource>,
-    namespace: String,
-    table_name: String,
+    table_ident: ElixirTableIdent,
 ) -> (Atom, bool) {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
 
-    let namespace_parts: Vec<&str> = namespace.split('.').collect();
-    let namespace_ident =
-        NamespaceIdent::from_vec(namespace_parts.iter().map(|s| s.to_string()).collect()).unwrap();
-    let table_ident = TableIdent::new(namespace_ident, table_name);
+    let table_ident: TableIdent = table_ident.into();
 
     let result = runtime.block_on(async { catalog.table_exists(&table_ident).await });
 
@@ -197,33 +215,25 @@ pub fn rest_catalog_table_exists(
 #[rustler::nif]
 pub fn rest_catalog_drop_table(
     catalog_resource: ResourceArc<RestCatalogResource>,
-    namespace: String,
-    table_name: String,
-) -> (Atom, HashMap<String, String>) {
+    table_ident: ElixirTableIdent,
+) -> (Atom, ElixirTableIdent) {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
 
-    let namespace_parts: Vec<&str> = namespace.split('.').collect();
-    let namespace_ident =
-        NamespaceIdent::from_vec(namespace_parts.iter().map(|s| s.to_string()).collect()).unwrap();
-    let table_name_clone = table_name.clone();
-    let table_ident = TableIdent::new(namespace_ident, table_name);
+    let table_ident_rust: TableIdent = table_ident.clone().into();
 
-    let result = runtime.block_on(async { catalog.drop_table(&table_ident).await });
+    let result = runtime.block_on(async { catalog.drop_table(&table_ident_rust).await });
 
     match result {
-        Ok(()) => {
-            let mut response = HashMap::new();
-            response.insert(
-                "table".to_string(),
-                format!("{}.{}", namespace, table_name_clone),
-            );
-            (atoms::ok(), response)
-        }
+        Ok(()) => (atoms::ok(), table_ident),
         Err(e) => {
-            let mut error_response = HashMap::new();
-            error_response.insert("error".to_string(), format!("Failed to drop table: {}", e));
-            (atoms::error(), error_response)
+            let error_table = ElixirTableIdent {
+                namespace: ElixirNamespaceIdent {
+                    parts: vec![format!("Failed to drop table: {}", e)],
+                },
+                name: "error".to_string(),
+            };
+            (atoms::error(), error_table)
         }
     }
 }
@@ -231,18 +241,17 @@ pub fn rest_catalog_drop_table(
 #[rustler::nif]
 pub fn rest_catalog_create_table(
     catalog_resource: ResourceArc<RestCatalogResource>,
-    namespace: String,
-    table_name: String,
+    table_ident: ElixirTableIdent,
     fields: Vec<IcebergField>,
     properties: HashMap<String, String>,
 ) -> TableResult {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
 
-    // Create namespace identifier
-    let namespace_parts: Vec<&str> = namespace.split('.').collect();
-    let namespace_ident =
-        NamespaceIdent::from_vec(namespace_parts.iter().map(|s| s.to_string()).collect()).unwrap();
+    // Extract namespace and table name
+    let namespace = table_ident.namespace.parts.join(".");
+    let table_name = table_ident.name.clone();
+    let namespace_ident: NamespaceIdent = table_ident.namespace.clone().into();
 
     // Convert IcebergField to NestedField
     let nested_fields: Vec<Arc<NestedField>> = fields
@@ -367,7 +376,6 @@ pub fn rest_catalog_create_table(
         .properties(properties)
         .build();
 
-    let table_name_clone = table_name.clone();
     let result =
         runtime.block_on(async { catalog.create_table(&namespace_ident, table_creation).await });
 
@@ -379,7 +387,7 @@ pub fn rest_catalog_create_table(
                 catalog_resource.warehouse.clone(),
                 catalog_resource.props.clone(),
                 namespace,
-                table_name_clone,
+                table_name,
                 catalog_resource.runtime.clone(),
             );
             TableResult::Ok(ResourceArc::new(table_resource))
@@ -391,16 +399,17 @@ pub fn rest_catalog_create_table(
 #[rustler::nif]
 pub fn rest_catalog_load_table(
     catalog_resource: ResourceArc<RestCatalogResource>,
-    namespace: String,
-    table_name: String,
+    table_ident: ElixirTableIdent,
 ) -> TableResult {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
-    let namespace_ident = NamespaceIdent::new(namespace.clone());
-    let table_ident = TableIdent::new(namespace_ident, table_name.clone());
+
+    let namespace = table_ident.namespace.parts.join(".");
+    let table_name = table_ident.name.clone();
+    let table_ident_rust: TableIdent = table_ident.into();
 
     // First check if table exists by trying to load it
-    let load_result = runtime.block_on(async { catalog.load_table(&table_ident).await });
+    let load_result = runtime.block_on(async { catalog.load_table(&table_ident_rust).await });
 
     match load_result {
         Ok(_table) => {
@@ -422,43 +431,37 @@ pub fn rest_catalog_load_table(
 #[rustler::nif]
 pub fn rest_catalog_rename_table(
     catalog_resource: ResourceArc<RestCatalogResource>,
-    src_namespace: String,
-    src_table_name: String,
-    dest_namespace: String,
-    dest_table_name: String,
+    src_table_ident: ElixirTableIdent,
+    dest_table_ident: ElixirTableIdent,
 ) -> (Atom, HashMap<String, String>) {
     let runtime = catalog_resource.runtime.clone();
     let catalog = catalog_resource.get_catalog();
 
-    // Create source table identifier
-    let src_namespace_parts: Vec<&str> = src_namespace.split('.').collect();
-    let src_namespace_ident =
-        NamespaceIdent::from_vec(src_namespace_parts.iter().map(|s| s.to_string()).collect())
-            .unwrap();
-    let src_table_ident = TableIdent::new(src_namespace_ident, src_table_name.clone());
-
-    // Create destination table identifier
-    let dest_namespace_parts: Vec<&str> = dest_namespace.split('.').collect();
-    let dest_namespace_ident =
-        NamespaceIdent::from_vec(dest_namespace_parts.iter().map(|s| s.to_string()).collect())
-            .unwrap();
-    let dest_table_ident = TableIdent::new(dest_namespace_ident, dest_table_name.clone());
+    let src_table_ident_rust: TableIdent = src_table_ident.clone().into();
+    let dest_table_ident_rust: TableIdent = dest_table_ident.clone().into();
 
     let result = runtime.block_on(async {
         catalog
-            .rename_table(&src_table_ident, &dest_table_ident)
+            .rename_table(&src_table_ident_rust, &dest_table_ident_rust)
             .await
     });
 
     match result {
         Ok(()) => {
             let mut response = HashMap::new();
+            let src_full_name = format!(
+                "{}.{}",
+                src_table_ident.namespace.parts.join("."),
+                src_table_ident.name
+            );
+            let dest_full_name = format!(
+                "{}.{}",
+                dest_table_ident.namespace.parts.join("."),
+                dest_table_ident.name
+            );
             response.insert(
                 "renamed".to_string(),
-                format!(
-                    "{}.{} -> {}.{}",
-                    src_namespace, src_table_name, dest_namespace, dest_table_name
-                ),
+                format!("{} -> {}", src_full_name, dest_full_name),
             );
             (atoms::ok(), response)
         }
