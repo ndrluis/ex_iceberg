@@ -40,3 +40,16 @@ pub enum IcebergFieldType {
         fields: Vec<IcebergField>,
     },
 }
+
+#[derive(Debug, Clone, NifStruct)]
+#[module = "ExIceberg.NamespaceIdent"]
+pub struct ElixirNamespaceIdent {
+    pub parts: Vec<String>,
+}
+
+#[derive(Debug, Clone, NifStruct)]
+#[module = "ExIceberg.TableIdent"]
+pub struct ElixirTableIdent {
+    pub namespace: ElixirNamespaceIdent,
+    pub name: String,
+}

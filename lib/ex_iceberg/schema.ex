@@ -30,7 +30,8 @@ defmodule ExIceberg.Schema do
       end
 
       # Usage:
-      {:ok, catalog, _} = MyApp.UserSchema.create_table(catalog, "my_namespace")
+      table_ident = ExIceberg.TableIdent.from_string("my_namespace.users")
+      {:ok, catalog, _} = MyApp.UserSchema.create_table(catalog, table_ident)
 
   ## Supported Types
 
@@ -129,24 +130,24 @@ defmodule ExIceberg.Schema do
       def __fields__, do: unquote(field_structs)
 
       @doc """
-      Creates the table in the specified catalog and namespace using the defined schema.
+      Creates the table in the specified catalog using the defined schema.
 
       ## Parameters
       - `catalog` - The catalog instance
-      - `namespace` - The namespace name
+      - `table_ident` - The TableIdent struct identifying the table
       - `properties` - Optional table properties (default: %{})
 
       ## Returns
       `{:ok, updated_catalog, response}` on success, `{:error, updated_catalog, reason}` on failure.
 
       ## Example
-          {:ok, catalog, response} = MySchema.create_table(catalog, "my_namespace", %{"owner" => "team"})
+          table_ident = ExIceberg.TableIdent.from_string("my_namespace.my_table")
+          {:ok, catalog, response} = MySchema.create_table(catalog, table_ident, %{"owner" => "team"})
       """
-      def create_table(catalog, namespace, properties \\ %{}) do
+      def create_table(catalog, %ExIceberg.TableIdent{} = table_ident, properties \\ %{}) do
         ExIceberg.Rest.Catalog.create_table(
           catalog,
-          namespace,
-          __table_name__(),
+          table_ident,
           __fields__(),
           properties
         )

@@ -26,29 +26,23 @@ defmodule ExIceberg.Nif do
   def rest_catalog_new(_config), do: :erlang.nif_error(:nif_not_loaded)
   def rest_catalog_list_namespaces(_catalog_resource), do: :erlang.nif_error(:nif_not_loaded)
 
-  def rest_catalog_create_namespace(_catalog_resource, _namespace, _properties),
+  def rest_catalog_create_namespace(_catalog_resource, _namespace_ident, _properties),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def rest_catalog_table_exists(_catalog_resource, _namespace, _table_name),
+  def rest_catalog_table_exists(_catalog_resource, _table_ident),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def rest_catalog_drop_table(_catalog_resource, _namespace, _table_name),
+  def rest_catalog_drop_table(_catalog_resource, _table_ident),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def rest_catalog_create_table(_catalog_resource, _namespace, _table_name, _fields, _properties),
+  def rest_catalog_create_table(_catalog_resource, _table_ident, _fields, _properties),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def rest_catalog_load_table(_catalog_resource, _namespace, _table_name),
+  def rest_catalog_load_table(_catalog_resource, _table_ident),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def rest_catalog_rename_table(
-        _catalog_resource,
-        _src_namespace,
-        _src_table_name,
-        _dest_namespace,
-        _dest_table_name
-      ),
-      do: :erlang.nif_error(:nif_not_loaded)
+  def rest_catalog_rename_table(_catalog_resource, _src_table_ident, _dest_table_ident),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   # Table operations using SmartTableResource
   def table_metadata(_table_resource), do: :erlang.nif_error(:nif_not_loaded)
