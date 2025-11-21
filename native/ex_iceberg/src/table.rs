@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
 use iceberg::table::Table;
-use iceberg::{Catalog, NamespaceIdent, TableIdent};
-use iceberg_catalog_rest::{RestCatalog, RestCatalogConfig};
+use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableIdent};
+use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder};
 
 use crate::atoms;
 
@@ -50,25 +50,6 @@ impl SmartTableResource {
         }
     }
 
-    fn build_catalog_config(&self) -> RestCatalogConfig {
-        match (&self.warehouse, self.props.is_empty()) {
-            (Some(warehouse), false) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .warehouse(warehouse.clone())
-                .props(self.props.clone())
-                .build(),
-            (Some(warehouse), true) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .warehouse(warehouse.clone())
-                .build(),
-            (None, false) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .props(self.props.clone())
-                .build(),
-            (None, true) => RestCatalogConfig::builder().uri(self.uri.clone()).build(),
-        }
-    }
-
     fn build_table_ident(&self) -> TableIdent {
         let namespace_parts: Vec<&str> = self.namespace.split('.').collect();
         let namespace_ident =
@@ -77,13 +58,26 @@ impl SmartTableResource {
         TableIdent::new(namespace_ident, self.table_name.clone())
     }
 
+    async fn get_catalog(&self) -> iceberg::Result<RestCatalog> {
+        let mut props = self.props.clone();
+        props.insert("uri".to_string(), self.uri.clone());
+        if let Some(warehouse) = &self.warehouse {
+            props.insert("warehouse".to_string(), warehouse.clone());
+        }
+
+        RestCatalogBuilder::default()
+            .load("ex_iceberg", props)
+            .await
+    }
+
     fn get_table(&self) -> Result<Table, String> {
-        let config = self.build_catalog_config();
-        let catalog = RestCatalog::new(config);
         let table_ident = self.build_table_ident();
 
         self.runtime
-            .block_on(async { catalog.load_table(&table_ident).await })
+            .block_on(async {
+                let catalog = self.get_catalog().await?;
+                catalog.load_table(&table_ident).await
+            })
             .map_err(|e| format!("Failed to load table: {}", e))
     }
 
