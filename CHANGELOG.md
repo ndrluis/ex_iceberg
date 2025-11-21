@@ -19,7 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Upgrade iceberg-rust to specific commit bcd1033ba5 for HTTPS protocol support and OAuth2 content-type fix
+* **Update iceberg-rust dependencies to v0.7.0** from git revision bcd1033ba5
+  * Update `iceberg` to v0.7.0 (from git revision)
+  * Update `iceberg-catalog-rest` to v0.7.0 (from git revision)
+  * Refactor NIF code to use new `CatalogBuilder::load()` API (breaking change in iceberg-rust v0.7.0)
+  * Pin `home` crate to v0.5.11 for Rust 1.87.0 compatibility
+  * All unit tests passing, integration tests deferred to CI
 * Improve Rust code idiomaticity by refactoring build_config() method to use pattern matching instead of if-else chains
 * **BREAKING**: All catalog functions now require structured identifiers (NamespaceIdent/TableIdent) instead of strings
   * `create_namespace/3` now requires NamespaceIdent instead of string

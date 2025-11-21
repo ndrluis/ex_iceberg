@@ -13,8 +13,8 @@ rustler_precompiled = []
 
 [dependencies]
 rustler = "0.36.1"
-iceberg = { git = "https://github.com/apache/iceberg-rust", rev = "bcd1033ba5c67982b7359a6330defeade9f82526" }
-iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", rev = "bcd1033ba5c67982b7359a6330defeade9f82526" }
+iceberg = "0.7.0"
+iceberg-catalog-rest = "0.7.0"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

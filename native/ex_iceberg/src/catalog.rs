@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use iceberg::spec::{ListType, MapType, NestedField, PrimitiveType, Schema, StructType, Type};
-use iceberg::{Catalog, NamespaceIdent, TableCreation, TableIdent};
-use iceberg_catalog_rest::{RestCatalog, RestCatalogConfig};
+use iceberg::{Catalog, CatalogBuilder, NamespaceIdent, TableCreation, TableIdent};
+use iceberg_catalog_rest::{RestCatalog, RestCatalogBuilder};
 
 use crate::atoms;
 use crate::table::SmartTableResource;
@@ -62,28 +62,19 @@ impl RestCatalogResource {
         }
     }
 
-    pub fn get_catalog(&self) -> RestCatalog {
-        let config = self.build_config();
-        RestCatalog::new(config)
-    }
+    pub async fn get_catalog(&self) -> iceberg::Result<RestCatalog> {
+        let mut props = self.props.clone();
 
-    fn build_config(&self) -> RestCatalogConfig {
-        match (&self.warehouse, self.props.is_empty()) {
-            (Some(warehouse), false) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .warehouse(warehouse.clone())
-                .props(self.props.clone())
-                .build(),
-            (Some(warehouse), true) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .warehouse(warehouse.clone())
-                .build(),
-            (None, false) => RestCatalogConfig::builder()
-                .uri(self.uri.clone())
-                .props(self.props.clone())
-                .build(),
-            (None, true) => RestCatalogConfig::builder().uri(self.uri.clone()).build(),
+        // Add required properties
+        props.insert("uri".to_string(), self.uri.clone());
+        if let Some(warehouse) = &self.warehouse {
+            props.insert("warehouse".to_string(), warehouse.clone());
         }
+
+        // Create catalog using the new builder API
+        RestCatalogBuilder::default()
+            .load("ex_iceberg", props)
+            .await
     }
 }
 
@@ -144,9 +135,11 @@ pub fn rest_catalog_list_namespaces(
     catalog_resource: ResourceArc<RestCatalogResource>,
 ) -> (Atom, Vec<ElixirNamespaceIdent>) {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
 
-    let result = runtime.block_on(async { catalog.list_namespaces(None).await });
+    let result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
+        catalog.list_namespaces(None).await
+    });
 
     match result {
         Ok(namespaces) => {
@@ -173,12 +166,12 @@ pub fn rest_catalog_create_namespace(
     properties: HashMap<String, String>,
 ) -> (Atom, ElixirNamespaceIdent) {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
-
     let namespace_ident: NamespaceIdent = namespace.into();
 
-    let result =
-        runtime.block_on(async { catalog.create_namespace(&namespace_ident, properties).await });
+    let result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
+        catalog.create_namespace(&namespace_ident, properties).await
+    });
 
     match result {
         Ok(namespace_obj) => {
@@ -200,11 +193,12 @@ pub fn rest_catalog_table_exists(
     table_ident: ElixirTableIdent,
 ) -> (Atom, bool) {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
-
     let table_ident: TableIdent = table_ident.into();
 
-    let result = runtime.block_on(async { catalog.table_exists(&table_ident).await });
+    let result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
+        catalog.table_exists(&table_ident).await
+    });
 
     match result {
         Ok(exists) => (atoms::ok(), exists),
@@ -218,11 +212,12 @@ pub fn rest_catalog_drop_table(
     table_ident: ElixirTableIdent,
 ) -> (Atom, ElixirTableIdent) {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
-
     let table_ident_rust: TableIdent = table_ident.clone().into();
 
-    let result = runtime.block_on(async { catalog.drop_table(&table_ident_rust).await });
+    let result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
+        catalog.drop_table(&table_ident_rust).await
+    });
 
     match result {
         Ok(()) => (atoms::ok(), table_ident),
@@ -246,7 +241,6 @@ pub fn rest_catalog_create_table(
     properties: HashMap<String, String>,
 ) -> TableResult {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
 
     // Extract namespace and table name
     let namespace = table_ident.namespace.parts.join(".");
@@ -376,8 +370,10 @@ pub fn rest_catalog_create_table(
         .properties(properties)
         .build();
 
-    let result =
-        runtime.block_on(async { catalog.create_table(&namespace_ident, table_creation).await });
+    let result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
+        catalog.create_table(&namespace_ident, table_creation).await
+    });
 
     match result {
         Ok(_table) => {
@@ -402,14 +398,16 @@ pub fn rest_catalog_load_table(
     table_ident: ElixirTableIdent,
 ) -> TableResult {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
 
     let namespace = table_ident.namespace.parts.join(".");
     let table_name = table_ident.name.clone();
     let table_ident_rust: TableIdent = table_ident.into();
 
     // First check if table exists by trying to load it
-    let load_result = runtime.block_on(async { catalog.load_table(&table_ident_rust).await });
+    let load_result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
+        catalog.load_table(&table_ident_rust).await
+    });
 
     match load_result {
         Ok(_table) => {
@@ -435,12 +433,11 @@ pub fn rest_catalog_rename_table(
     dest_table_ident: ElixirTableIdent,
 ) -> (Atom, HashMap<String, String>) {
     let runtime = catalog_resource.runtime.clone();
-    let catalog = catalog_resource.get_catalog();
-
     let src_table_ident_rust: TableIdent = src_table_ident.clone().into();
     let dest_table_ident_rust: TableIdent = dest_table_ident.clone().into();
 
     let result = runtime.block_on(async {
+        let catalog = catalog_resource.get_catalog().await?;
         catalog
             .rename_table(&src_table_ident_rust, &dest_table_ident_rust)
             .await

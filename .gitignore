@@ -29,3 +29,7 @@ ex_iceberg-*.tar
 
 # Rust binary artifacts
 /native/*/target/
+*.rs.bk
+*.rlib
+*.log
+.env*
