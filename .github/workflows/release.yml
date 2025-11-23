@@ -75,7 +75,7 @@ jobs:
           project-dir: "native/ex_iceberg"
 
       - name: Artifact attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: ${{ steps.build-crate.outputs.file-path }}
 
