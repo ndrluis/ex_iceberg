@@ -44,7 +44,7 @@ defmodule ExIceberg.MixProject do
       {:jason, "~> 1.2"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:plug, "~> 1.0"},
-      {:rustler, "~> 0.34", optional: true},
+      {:rustler, "~> 0.37", optional: true},
       {:rustler_precompiled, "~> 0.8"}
     ]
   end
