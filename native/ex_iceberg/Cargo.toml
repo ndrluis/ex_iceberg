@@ -12,7 +12,7 @@ default = []
 rustler_precompiled = []
 
 [dependencies]
-rustler = "0.36.1"
+rustler = "0.37.0"
 iceberg = "0.7.0"
 iceberg-catalog-rest = "0.7.0"
 tokio = { version = "1.0", features = ["full"] }
