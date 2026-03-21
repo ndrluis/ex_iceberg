@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+* **Update iceberg-rust dependencies to v0.9.0**
+  * Update `iceberg` to v0.9.0 (from v0.7.0)
+  * Update `iceberg-catalog-rest` to v0.9.0 (from v0.7.0)
+  * Update `rustler` to v0.37.3 (from v0.37.0)
+  * No NIF code changes required — all APIs remain compatible
+* Fix Rust build cache path in CI (`native/ex_iceberg_nif/target` → `native/ex_iceberg/target`)
+
 * **Update iceberg-rust dependencies to v0.7.0** from git revision bcd1033ba5
   * Update `iceberg` to v0.7.0 (from git revision)
   * Update `iceberg-catalog-rest` to v0.7.0 (from git revision)
