@@ -33,3 +33,6 @@ ex_iceberg-*.tar
 *.rlib
 *.log
 .env*
+
+# Git worktrees
+.worktrees/
