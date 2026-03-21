@@ -63,7 +63,7 @@ jobs:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
-          native/ex_iceberg_nif/target
+          native/ex_iceberg/target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-
 
